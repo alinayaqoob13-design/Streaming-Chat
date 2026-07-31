@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0f;
+  --color-surface: #12121a;
+  --color-surface-elevated: #1a1a25;
+  --color-border: #2a2a3a;
+  --color-border-subtle: #1e1e2e;
+  --color-text-primary: #e8e8f0;
+  --color-text-secondary: #8a8a9a;
+  --color-text-muted: #5a5a6a;
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-accent-glow: rgba(99, 102, 241, 0.15);
+  --color-user-bubble: #1e1e3a;
+  --color-assistant-bubble: #12121a;
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+
+  --animate-thinking-pulse: thinking-pulse 1.5s ease-in-out infinite;
+  --animate-fade-in-up: fade-in-up 0.3s ease-out forwards;
+  --animate-cursor-blink: cursor-blink 1s step-end infinite;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes message-enter {
+  0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes token-appear {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Markdown styles for streaming content */
+.prose-streaming p {
+  margin: 0.5em 0;
+  line-height: 1.6;
+}
+
+.prose-streaming p:first-child {
+  margin-top: 0;
+}
+
+.prose-streaming p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-streaming code {
+  background: var(--color-surface-elevated);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.prose-streaming pre {
+  background: var(--color-surface-elevated);
+  padding: 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+  border: 1px solid var(--color-border);
+}
+
+.prose-streaming pre code {
+  background: none;
+  padding: 0;
+}
+
+.prose-streaming ul, .prose-streaming ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.prose-streaming li {
+  margin: 0.25em 0;
+}
+
+.prose-streaming strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.prose-streaming blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 1em;
+  margin: 0.75em 0;
+  color: var(--color-text-secondary);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
