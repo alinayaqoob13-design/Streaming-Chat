@@ -25,9 +25,10 @@
 
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, RotateCcw, PenLine } from "lucide-react";
+import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp } from "lucide-react";
 import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
+import { NotesChat } from "@/components/notes-chat";
 import type { StudyNotes } from "@/types/notes";
 
 type BuddyStatus = "input" | "generating" | "result" | "error";
@@ -38,6 +39,7 @@ export function NotesBuddy() {
   const [error, setError] = useState<string | null>(null);
   // Kept so a failed generation can restore the student's text into the input
   const [lastNotes, setLastNotes] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
 
   const handleGenerate = useCallback(async (notes: string) => {
     setStatus("generating");
@@ -131,6 +133,32 @@ export function NotesBuddy() {
             </button>
           </div>
           <NotesResult result={result} />
+
+          {/* Follow-up chat — collapsible so it doesn't crowd the tabs.
+              key={lastNotes} forces a remount per study set: a conversation
+              never bleeds into different notes. */}
+          <div className="shrink-0 rounded-xl border border-border bg-surface-elevated">
+            <button
+              onClick={() => setChatOpen((open) => !open)}
+              aria-expanded={chatOpen}
+              className="flex w-full items-center justify-between px-4 py-3 text-left focus:outline-none focus:ring-2 focus:ring-accent rounded-xl"
+            >
+              <span className="inline-flex items-center gap-2 text-sm font-medium text-text-primary">
+                <MessageSquareText size={16} className="text-accent" />
+                Ask questions about these notes
+              </span>
+              {chatOpen ? (
+                <ChevronUp size={16} className="text-text-muted" />
+              ) : (
+                <ChevronDown size={16} className="text-text-muted" />
+              )}
+            </button>
+            {chatOpen && (
+              <div className="flex h-[380px] flex-col border-t border-border">
+                <NotesChat key={lastNotes} notes={lastNotes} />
+              </div>
+            )}
+          </div>
         </>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">

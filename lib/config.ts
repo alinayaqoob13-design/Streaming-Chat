@@ -108,6 +108,20 @@ export const NOTES_INPUT_LIMITS = {
   maxChars: 15000,
 } as const;
 
+// Follow-up chat about a generated study set (POST /api/notes/chat).
+// The notes themselves are embedded by the route — the client never
+// controls the prompt, only the conversation messages.
+export const NOTES_FOLLOWUP_SYSTEM_PROMPT = `You are a study assistant helping a university student understand their own lecture notes.
+
+## Rules
+- Answer strictly from the notes provided below. They are the entire universe of this conversation.
+- If the answer is not in the notes, say so in one sentence — never import outside knowledge.
+- Keep answers short and student-friendly. Use simple language, small examples from the notes when useful.
+- If the student asks for memory tricks, comparisons, or quick revisions of the notes, help — that is still grounded in the notes.
+
+## The student's notes
+`;
+
 // ---------------------------------------------------------------------------
 // STREAMING CONFIG
 // ---------------------------------------------------------------------------

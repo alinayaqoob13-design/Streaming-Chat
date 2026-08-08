@@ -39,6 +39,8 @@ interface ChatInputProps {
   status: "idle" | "submitted" | "streaming" | "error" | "ready";
   /** Whether the last message was stopped */
   lastMessageStopped?: boolean;
+  /** Placeholder for the idle textarea (defaults to the main chat copy) */
+  placeholder?: string;
 }
 
 type ButtonState = "idle" | "ready" | "sending" | "streaming" | "stopped";
@@ -49,6 +51,7 @@ export function ChatInput({
   onRegenerate,
   status,
   lastMessageStopped = false,
+  placeholder = "Ask anything about frontend engineering...",
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [buttonState, setButtonState] = useState<ButtonState>("idle");
@@ -147,7 +150,7 @@ export function ChatInput({
           placeholder={
             isInputDisabled 
               ? "Assistant is responding..." 
-              : "Ask anything about frontend engineering..."
+              : placeholder
           }
           rows={1}
           className={cn(

@@ -66,6 +66,8 @@ app/
   api/chat/route.ts      # Server route: POST streams via streamText + Gemini; GET is a health check
   api/notes/route.ts     # Study Notes Buddy: POST validates pasted notes, returns summary+flashcards+quiz
                          # via generateObject + zod schema (NOT streamed); GET is a health check
+  api/notes/chat/route.ts# Follow-up chat about a study set: POST { notes, messages }, streams via
+                         # streamText; notes are embedded in the system prompt server-side
   page.tsx               # Main page, renders ChatContainer
   layout.tsx             # Root layout + metadata
   globals.css            # Tailwind v4 import + @theme design tokens + keyframes
@@ -78,13 +80,14 @@ components/
   notes-result.tsx       # Tabbed artifact view: Summary | Flashcards | Quiz (pinned tab bar, scrolling panel)
   flashcards-view.tsx    # 3D flip-card deck (index-card style, arrow-key navigation)
   quiz-view.tsx          # Interactive MCQ quiz: lock-on-answer, instant feedback, live score, retake
+  notes-chat.tsx         # Follow-up chat panel for a study set (useChat + /api/notes/chat, simple stick-to-bottom)
   thinking-indicator.tsx # Animated pre-token "thinking" state
   scroll-anchor.tsx      # Floating "jump to latest" button with count badge
 hooks/
   use-auto-scroll.ts     # Pinned/free auto-scroll logic (threshold 30px, jump-button counting)
 lib/
-  config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, NOTES_SYSTEM_PROMPT, DEFAULT_MODEL,
-                         # GENERATION_CONFIG, NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES
+  config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, NOTES_SYSTEM_PROMPT, NOTES_FOLLOWUP_SYSTEM_PROMPT,
+                         # DEFAULT_MODEL, GENERATION_CONFIG, NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES
   utils.ts               # cn(), formatTime(), generateId(), debounce()
 types/
   chat.ts                # Shared interfaces (ChatMessage, ConversationState, ScrollBehavior)
