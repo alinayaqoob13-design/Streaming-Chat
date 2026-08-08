@@ -71,6 +71,44 @@ export const SYSTEM_PROMPT = `You are CapstoneAI, a helpful, knowledgeable, and 
 - Break long explanations into digestible sections with clear headings.`;
 
 // ---------------------------------------------------------------------------
+// STUDY NOTES BUDDY — PROMPT & GENERATION CONFIG
+// ---------------------------------------------------------------------------
+// Used by POST /api/notes (generateObject with a zod schema), NOT by the
+// streaming chat route. Kept separate from SYSTEM_PROMPT because the two
+// features have different goals: chat is conversational, notes generation
+// must be deterministic and strictly structured.
+export const NOTES_SYSTEM_PROMPT = `You are a study assistant that turns raw lecture notes into structured study material for university students.
+
+## Task
+Given the student's pasted notes, produce exactly three artifacts:
+
+1. **summary** — A concise markdown summary of the notes. Use short headings and bullet points. Capture definitions, key concepts, and relationships. Do not invent facts that are not in the notes; if the notes are thin, say so briefly instead of padding.
+
+2. **flashcards** — 6 to 10 flashcards. Each front is a term, name, or short question; each back is a one-or-two sentence answer taken from the notes. Cover the most exam-worthy points first.
+
+3. **quiz** — 4 to 6 multiple-choice questions. Each has exactly 4 options, one correctIndex (0-based) pointing to the right option, and a one-sentence explanation of why that answer is correct. Distractors must be plausible but clearly wrong given the notes.
+
+## Constraints
+- Ground everything in the provided notes. Never import outside knowledge that contradicts or extends them.
+- Keep language simple and student-friendly.
+- If the input is not study material (e.g. gibberish, a shopping list), still return valid output: summarize what was given and make the flashcards/quiz as useful as possible from it.`;
+
+// Lower temperature than chat: structured study material should be accurate
+// and reproducible, not creative. maxTokens is higher because the response
+// carries summary + flashcards + quiz in one JSON payload.
+export const NOTES_GENERATION_CONFIG = {
+  maxTokens: 4096,
+  temperature: 0.4,
+} as const;
+
+// Input limits for pasted notes — validated in the API route before any
+// tokens are spent. The max caps prompt size to control cost and latency.
+export const NOTES_INPUT_LIMITS = {
+  minChars: 30,
+  maxChars: 15000,
+} as const;
+
+// ---------------------------------------------------------------------------
 // STREAMING CONFIG
 // ---------------------------------------------------------------------------
 // Controls how the stream behaves on the wire.
@@ -90,4 +128,7 @@ export const ERROR_MESSAGES = {
   rateLimit: "I'm receiving too many messages right now. Please wait a few seconds and try again.",
   contextLength: "This conversation has gotten quite long. Starting fresh might help.",
   apiKeyMissing: "The AI service is not configured correctly. Please contact support.",
+  notesTooShort: "Your notes look a bit short — paste at least a few sentences so I can make useful study material.",
+  notesTooLong: "These notes are too long for one go. Try splitting them into smaller sections.",
+  notesInvalid: "Could not read your notes. Please paste plain text and try again.",
 } as const;
