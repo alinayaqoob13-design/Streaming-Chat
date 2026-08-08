@@ -79,8 +79,10 @@ components/
                          # (key: capstone-study-sets, newest first, capped at 20, hydration-guarded)
   notes-input.tsx        # Notes textarea + 3-state Generate button + empty-state guidance card
   notes-history.tsx      # Saved study sets list: reopen (free, no API call) or delete per row
-  notes-result.tsx       # Tabbed artifact view: Summary | Flashcards | Quiz (pinned tab bar, scrolling panel)
-  flashcards-view.tsx    # 3D flip-card deck (index-card style, arrow-key navigation)
+  notes-result.tsx       # Tabbed artifact view: Summary | Flashcards | Quiz (pinned tab bar, scrolling panel,
+                         # dir=rtl for Urdu output)
+  flashcards-view.tsx    # Flip-card deck with two modes: browse (arrow-key nav) and practice
+                         # (shuffle, know/don't-know, missed cards re-queued once, session score)
   quiz-view.tsx          # Interactive MCQ quiz: lock-on-answer, instant feedback, live score, retake
   notes-chat.tsx         # Follow-up chat panel for a study set (useChat + /api/notes/chat, simple stick-to-bottom)
   thinking-indicator.tsx # Animated pre-token "thinking" state
@@ -90,6 +92,7 @@ hooks/
 lib/
   config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, buildNotesSystemPrompt(options), NOTES_FOLLOWUP_SYSTEM_PROMPT,
                          # DEFAULT_MODEL, GENERATION_CONFIG, NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES
+  export-notes.ts        # studySetToMarkdown + downloadMarkdown — client-side export, zero tokens
   utils.ts               # cn(), formatTime(), generateId(), debounce()
 types/
   chat.ts                # Shared interfaces (ChatMessage, ConversationState, ScrollBehavior)
