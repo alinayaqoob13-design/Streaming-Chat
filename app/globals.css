@@ -11,7 +11,8 @@
   --color-border-subtle: #241a20;
   --color-text-primary: #f3ecee;
   --color-text-secondary: #b09aa2;
-  --color-text-muted: #7a6670;
+  --color-text-muted: #9a8691; /* brightened from #7a6670 — axe/Lighthouse
+     color-contrast: 3.5:1 on surface failed WCAG AA; this is ≥4.5:1 */
   --color-accent: #d69cae;
   --color-accent-hover: #e8b7c4;
   --color-accent-glow: rgba(214, 156, 174, 0.15);

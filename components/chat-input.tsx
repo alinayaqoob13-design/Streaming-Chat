@@ -147,6 +147,7 @@ export function ChatInput({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           disabled={isInputDisabled}
+          aria-label="Chat message"
           placeholder={
             isInputDisabled 
               ? "Assistant is responding..." 

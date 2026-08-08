@@ -90,7 +90,7 @@ function OptionChips<T extends string | number>({
             onClick={() => onChange(c.value)}
             disabled={disabled}
             className={cn(
-              "rounded-lg px-2.5 py-1.5 text-xs transition-colors duration-150",
+              "inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg px-3 py-2 text-xs transition-colors duration-150",
               "focus:outline-none focus:ring-2 focus:ring-accent",
               "disabled:cursor-not-allowed disabled:opacity-50",
               value === c.value
