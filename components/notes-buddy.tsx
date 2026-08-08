@@ -9,29 +9,69 @@
  *      ^                  |
  *      └────Try again─────┴──!200──> error
  *
- * - "input":      NotesInput visible, empty-state guidance when blank
+ * - "input":      NotesInput visible, empty-state guidance when blank;
+ *                 NotesHistory lists saved study sets below
  * - "generating": textarea locked, spinner on the button
  * - "result":     NotesResult visible + "New notes" to start over
  * - "error":      error banner with the API's friendly message + retry;
  *                 the student's notes are restored to the textarea so a
  *                 failed call never eats their text
  *
- * The full StudyNotes artifact stays in state; Day 3's tabbed view and
- * Day 5's localStorage persistence both plug into this component.
+ * Persistence: every successful generation is saved to localStorage as a
+ * SavedStudySet (newest first, capped) and can be reopened from the input
+ * screen without spending a single token. There is no server-side storage.
  * ============================================================================
  */
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp } from "lucide-react";
 import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
-import type { StudyNotes } from "@/types/notes";
+import { NotesHistory } from "@/components/notes-history";
+import { generateId } from "@/lib/utils";
+import type { StudyNotes, SavedStudySet } from "@/types/notes";
 
 type BuddyStatus = "input" | "generating" | "result" | "error";
+
+// ---------------------------------------------------------------------------
+// LOCAL STORAGE PERSISTENCE
+// ---------------------------------------------------------------------------
+// Whole study sets (artifact + source notes) — reopening costs no tokens.
+const STORAGE_KEY = "capstone-study-sets";
+// Hard cap: a set can carry ~15k chars of notes + artifact; 20 sets stays
+// well inside the ~5MB localStorage budget.
+const MAX_SAVED_SETS = 20;
+
+function loadSetsFromStorage(): SavedStudySet[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSetsToStorage(sets: SavedStudySet[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+  } catch {
+    // Storage full or unavailable — fail silently, the app still works
+  }
+}
+
+// Title = first non-empty line of the notes, trimmed for the history row
+function deriveTitle(notes: string): string {
+  const firstLine = notes.split("\n").map((l) => l.trim()).find(Boolean) ?? "Untitled notes";
+  return firstLine.length > 60 ? firstLine.slice(0, 60) + "…" : firstLine;
+}
 
 export function NotesBuddy() {
   const [status, setStatus] = useState<BuddyStatus>("input");
@@ -40,6 +80,14 @@ export function NotesBuddy() {
   // Kept so a failed generation can restore the student's text into the input
   const [lastNotes, setLastNotes] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [savedSets, setSavedSets] = useState<SavedStudySet[]>([]);
+  // Guard against hydration mismatch: localStorage is read only after mount
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setSavedSets(loadSetsFromStorage());
+    setHasMounted(true);
+  }, []);
 
   const handleGenerate = useCallback(async (notes: string) => {
     setStatus("generating");
@@ -62,8 +110,23 @@ export function NotesBuddy() {
         return;
       }
 
-      setResult(data as StudyNotes);
+      const studyNotes = data as StudyNotes;
+      setResult(studyNotes);
       setStatus("result");
+
+      // Persist the set (newest first, capped) — reopening is free
+      setSavedSets((prev) => {
+        const saved: SavedStudySet = {
+          ...studyNotes,
+          id: generateId(),
+          title: deriveTitle(notes),
+          createdAt: Date.now(),
+          sourceNotes: notes,
+        };
+        const next = [saved, ...prev].slice(0, MAX_SAVED_SETS);
+        saveSetsToStorage(next);
+        return next;
+      });
     } catch {
       // Network failure — fetch itself threw
       setError("Could not reach the server. Check your connection and try again.");
@@ -81,6 +144,24 @@ export function NotesBuddy() {
     setLastNotes("");
     setError(null);
     setStatus("input");
+  }, []);
+
+  // Reopen a saved set — no API call, everything renders from localStorage.
+  // sourceNotes restores the follow-up chat's grounding too.
+  const handleOpenSet = useCallback((set: SavedStudySet) => {
+    setResult({ summary: set.summary, flashcards: set.flashcards, quiz: set.quiz });
+    setLastNotes(set.sourceNotes);
+    setError(null);
+    setChatOpen(false);
+    setStatus("result");
+  }, []);
+
+  const handleDeleteSet = useCallback((id: string) => {
+    setSavedSets((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      saveSetsToStorage(next);
+      return next;
+    });
   }, []);
 
   return (
@@ -167,6 +248,14 @@ export function NotesBuddy() {
             isGenerating={status === "generating"}
             initialNotes={lastNotes}
           />
+          {/* Saved study sets — only after mount (hydration guard) */}
+          {hasMounted && (
+            <NotesHistory
+              sets={savedSets}
+              onOpen={handleOpenSet}
+              onDelete={handleDeleteSet}
+            />
+          )}
         </div>
       )}
     </div>
