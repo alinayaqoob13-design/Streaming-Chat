@@ -31,6 +31,9 @@
   /* Display face (Playfair Display serif) wired in layout.tsx via next/font —
      used with restraint: app title, tab labels, flashcard fronts */
   --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
+  /* Nastaliq face for Urdu artifact panels — the default serif stack renders
+     Urdu as disconnected blocky glyphs; Nastaliq is what Urdu readers expect */
+  --font-urdu: var(--font-noto-nastaliq), serif;
 }
 
 @keyframes thinking-pulse {
@@ -180,6 +183,17 @@ body {
 .card-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+/* Index-card paper: faint ruled lines, like a real revision card */
+.card-paper {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgba(214, 156, 174, 0.07) 27px,
+    rgba(214, 156, 174, 0.07) 28px
+  );
 }
 
 /* Print stylesheet — "save as PDF" for a study set.

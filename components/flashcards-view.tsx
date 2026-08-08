@@ -216,7 +216,17 @@ export function FlashcardsView({ flashcards }: FlashcardsViewProps) {
       {/* Flip card — shared by browse and practice                           */}
       {/* ----------------------------------------------------------------- */}
       {mode !== "done" && (
-        <div className="perspective-card w-full max-w-xl">
+        <div className="perspective-card relative w-full max-w-xl">
+          {/* Deck stack — two cards peeking behind the top one. Purely
+              decorative, so hidden from assistive tech. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 translate-y-1.5 -rotate-2 rounded-2xl border border-border bg-surface"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 translate-y-0.5 rotate-1 rounded-2xl border border-border bg-surface-elevated/60"
+          />
           <AnimatePresence mode="wait">
             <motion.button
               key={`${mode}-${currentIndex}-${pointer}`}
@@ -226,7 +236,7 @@ export function FlashcardsView({ flashcards }: FlashcardsViewProps) {
               transition={{ duration: 0.18 }}
               onClick={() => setFlipped((f) => !f)}
               aria-label={flipped ? `Answer: ${card.back}` : `Flashcard: ${card.front}. Activate to reveal the answer.`}
-              className="block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"
+              className="relative block w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-2xl"
             >
               <motion.div
                 animate={{ rotateY: flipped ? 180 : 0 }}
@@ -234,7 +244,7 @@ export function FlashcardsView({ flashcards }: FlashcardsViewProps) {
                 className="preserve-3d relative h-64 w-full sm:h-72"
               >
                 {/* Front — the question/term */}
-                <div className="card-face absolute inset-0 flex flex-col rounded-2xl border border-border bg-surface-elevated p-6">
+                <div className="card-face card-paper absolute inset-0 flex flex-col rounded-2xl border border-border bg-surface-elevated p-6 shadow-2xl shadow-black/50">
                   <span className="h-1.5 w-16 rounded-full bg-accent" aria-hidden="true" />
                   <span className="mt-3 text-[10px] font-medium uppercase tracking-widest text-text-muted">
                     Question
@@ -248,7 +258,7 @@ export function FlashcardsView({ flashcards }: FlashcardsViewProps) {
                 </div>
 
                 {/* Back — the answer, pre-rotated so it reads correctly */}
-                <div className="card-face absolute inset-0 flex flex-col rounded-2xl border border-accent/40 bg-user-bubble p-6 [transform:rotateY(180deg)]">
+                <div className="card-face card-paper absolute inset-0 flex flex-col rounded-2xl border border-accent/40 bg-user-bubble p-6 shadow-2xl shadow-black/50 [transform:rotateY(180deg)]">
                   <span className="h-1.5 w-16 rounded-full bg-accent" aria-hidden="true" />
                   <span className="mt-3 text-[10px] font-medium uppercase tracking-widest text-accent">
                     Answer

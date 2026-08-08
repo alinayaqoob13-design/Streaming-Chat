@@ -66,15 +66,26 @@ export function NotesResult({ result, language = "en" }: NotesResultProps) {
             aria-selected={activeTab === id}
             onClick={() => setActiveTab(id)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150",
+              "relative inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors duration-150",
               "focus:outline-none focus:ring-2 focus:ring-accent",
               activeTab === id
-                ? "bg-accent font-medium text-on-accent"
+                ? "font-medium text-on-accent"
                 : "bg-surface-elevated text-text-secondary hover:bg-border hover:text-text-primary"
             )}
           >
-            <Icon size={14} />
-            {label}
+            {/* Animated pill — layoutId makes the accent background glide
+                between tabs instead of snapping, one element at a time. */}
+            {activeTab === id && (
+              <motion.span
+                layoutId="activeTab"
+                className="absolute inset-0 rounded-lg bg-accent"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+              />
+            )}
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              <Icon size={14} />
+              {label}
+            </span>
           </button>
         ))}
       </div>
@@ -85,7 +96,10 @@ export function NotesResult({ result, language = "en" }: NotesResultProps) {
       {/* ----------------------------------------------------------------- */}
       <div
         dir={language === "ur" ? "rtl" : "ltr"}
-        className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-surface p-4 sm:p-5"
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-surface p-4 sm:p-5",
+          language === "ur" && "font-urdu leading-loose"
+        )}
       >
         <AnimatePresence mode="wait">
           <motion.div

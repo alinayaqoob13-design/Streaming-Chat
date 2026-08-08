@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Playfair_Display } from "next/font/google";
+import { Playfair_Display, Noto_Nastaliq_Urdu } from "next/font/google";
 import "./globals.css";
 
 // Display face for headings/title/tab labels — loaded once, exposed as a
@@ -7,6 +7,14 @@ import "./globals.css";
 const playfair = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-playfair",
+});
+
+// Urdu artifact output deserves a proper Nastaliq face — the system serif
+// fallback renders Urdu as disconnected blocky shapes that students in
+// Pakistan immediately notice. Applied only on Urdu panels (--font-urdu).
+const notoNastaliq = Noto_Nastaliq_Urdu({
+  subsets: ["arabic"],
+  variable: "--font-noto-nastaliq",
 });
 
 export const metadata: Metadata = {
@@ -22,7 +30,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`min-h-screen bg-background ${playfair.variable}`}>
+      <body
+        className={`min-h-screen bg-background ${playfair.variable} ${notoNastaliq.variable}`}
+      >
         {children}
       </body>
     </html>
