@@ -178,7 +178,7 @@ export function ChatInput({
           "disabled:cursor-not-allowed",
           // State-based styling
           buttonState === "idle" && "bg-surface-elevated text-text-muted",
-          buttonState === "ready" && "bg-accent text-white hover:bg-accent-hover focus:ring-accent",
+          buttonState === "ready" && "bg-accent text-on-accent hover:bg-accent-hover focus:ring-accent",
           buttonState === "sending" && "bg-surface-elevated text-accent animate-pulse",
           buttonState === "streaming" && "bg-danger/10 text-danger hover:bg-danger/20 focus:ring-danger",
           buttonState === "stopped" && "bg-accent/10 text-accent hover:bg-accent/20 focus:ring-accent",
