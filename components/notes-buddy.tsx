@@ -27,12 +27,15 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp, Download, Printer } from "lucide-react";
 import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
 import { NotesHistory } from "@/components/notes-history";
 import { generateId } from "@/lib/utils";
+import { studySetToMarkdown, downloadMarkdown } from "@/lib/export-notes";
 import { DEFAULT_GENERATION_OPTIONS, type StudyNotes, type SavedStudySet, type GenerationOptions, type OutputLanguage } from "@/types/notes";
 
 type BuddyStatus = "input" | "generating" | "result" | "error";
@@ -210,13 +213,37 @@ export function NotesBuddy() {
             <h2 className="text-base font-semibold text-text-primary">
               Your study material
             </h2>
-            <button
-              onClick={handleNewNotes}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-surface-elevated px-3 py-2 text-sm text-text-primary transition-colors hover:bg-border focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              <PenLine size={14} />
-              New notes
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Export — markdown download + print-to-PDF, both free/local */}
+              <button
+                onClick={() =>
+                  downloadMarkdown(
+                    `${deriveTitle(lastNotes).replace(/[^\w\- ]/g, "").trim() || "study-notes"}.md`,
+                    studySetToMarkdown(result, deriveTitle(lastNotes), Date.now())
+                  )
+                }
+                aria-label="Download study set as Markdown"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-elevated px-3 py-2 text-sm text-text-primary transition-colors hover:bg-border focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <Download size={14} />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+              <button
+                onClick={() => window.print()}
+                aria-label="Print or save as PDF"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-elevated px-3 py-2 text-sm text-text-primary transition-colors hover:bg-border focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <Printer size={14} />
+                <span className="hidden sm:inline">Print</span>
+              </button>
+              <button
+                onClick={handleNewNotes}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-elevated px-3 py-2 text-sm text-text-primary transition-colors hover:bg-border focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <PenLine size={14} />
+                New notes
+              </button>
+            </div>
           </div>
           <NotesResult result={result} language={resultLanguage} />
 
@@ -244,6 +271,46 @@ export function NotesBuddy() {
                 <NotesChat key={lastNotes} notes={lastNotes} />
               </div>
             )}
+          </div>
+
+          {/* Print-only handout layout — visible solely in @media print (see
+              globals.css). Contains the WHOLE set (not just the active tab)
+              in light-on-white, so "Print → Save as PDF" yields a complete
+              revision document. */}
+          <div className="print-area hidden print:block">
+            <h1>{deriveTitle(lastNotes)}</h1>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {result.summary}
+            </ReactMarkdown>
+            <h2>Flashcards</h2>
+            <ol>
+              {result.flashcards.map((card, i) => (
+                <li key={i}>
+                  <strong>{card.front}</strong> — {card.back}
+                </li>
+              ))}
+            </ol>
+            <h2>Quiz</h2>
+            <ol>
+              {result.quiz.map((q, i) => (
+                <li key={i}>
+                  <p>{q.question}</p>
+                  <ul>
+                    {q.options.map((opt, oi) => (
+                      <li key={oi}>
+                        {opt}
+                        {oi === q.correctIndex ? " ✓" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>
+                    <em>
+                      Answer: {String.fromCharCode(65 + q.correctIndex)} — {q.explanation}
+                    </em>
+                  </p>
+                </li>
+              ))}
+            </ol>
           </div>
         </>
       ) : (

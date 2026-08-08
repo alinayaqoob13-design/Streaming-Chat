@@ -181,6 +181,42 @@ body {
   -webkit-backface-visibility: hidden;
 }
 
+/* Print stylesheet — "save as PDF" for a study set.
+   The app chrome is hidden via visibility (works no matter how deep the
+   .print-area sits in the tree), and the print area is forced light-on-white
+   so it reads like a handout, not a screenshot of a dark app. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    background: #fff;
+    padding: 2rem;
+  }
+
+  .print-area * {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #bbb !important;
+  }
+
+  .print-area h1,
+  .print-area h2,
+  .print-area h3,
+  .print-area h4 {
+    color: #000 !important;
+  }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
