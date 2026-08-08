@@ -27,20 +27,83 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Loader2, FileText, Layers, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_GENERATION_OPTIONS,
+  type GenerationOptions,
+  type QuizDifficulty,
+  type OutputLanguage,
+} from "@/types/notes";
 
 // Mirrors NOTES_INPUT_LIMITS in lib/config.ts (server-only, not importable here).
 const MIN_CHARS = 30;
 const MAX_CHARS = 15000;
 
+// Chip choices — the route clamps anything outside the schema bounds anyway
+const DIFFICULTY_CHOICES: { value: QuizDifficulty; label: string }[] = [
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+];
+const FLASHCARD_CHOICES = [5, 8, 12];
+const QUIZ_CHOICES = [3, 5, 8];
+const LANGUAGE_CHOICES: { value: OutputLanguage; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "ur", label: "اردو" },
+];
+
 type ButtonState = "idle" | "ready" | "generating";
 
 interface NotesInputProps {
-  /** Called with the trimmed notes when the student hits Generate */
-  onGenerate: (notes: string) => void;
+  /** Called with the trimmed notes + chosen options when the student hits Generate */
+  onGenerate: (notes: string, options: GenerationOptions) => void;
   /** True while the API call is in flight */
   isGenerating: boolean;
   /** Pre-fill text — used to restore the notes after a failed generation */
   initialNotes?: string;
+}
+
+/** One labeled row of single-select chips (difficulty, counts, language) */
+function OptionChips<T extends string | number>({
+  label,
+  choices,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  choices: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-20 shrink-0 text-[11px] font-medium uppercase tracking-wider text-text-muted">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={label}>
+        {choices.map((c) => (
+          <button
+            key={String(c.value)}
+            role="radio"
+            aria-checked={value === c.value}
+            onClick={() => onChange(c.value)}
+            disabled={disabled}
+            className={cn(
+              "rounded-lg px-2.5 py-1.5 text-xs transition-colors duration-150",
+              "focus:outline-none focus:ring-2 focus:ring-accent",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              value === c.value
+                ? "bg-accent font-medium text-on-accent"
+                : "bg-surface-elevated text-text-secondary hover:bg-border hover:text-text-primary"
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function NotesInput({
@@ -49,6 +112,7 @@ export function NotesInput({
   initialNotes = "",
 }: NotesInputProps) {
   const [notes, setNotes] = useState(initialNotes);
+  const [options, setOptions] = useState<GenerationOptions>(DEFAULT_GENERATION_OPTIONS);
   const [buttonState, setButtonState] = useState<ButtonState>("idle");
 
   // Keep the button state derived from the text + generation status —
@@ -66,7 +130,7 @@ export function NotesInput({
   const handleGenerate = () => {
     const trimmed = notes.trim();
     if (buttonState !== "ready") return;
-    onGenerate(trimmed);
+    onGenerate(trimmed, options);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -160,6 +224,40 @@ export function NotesInput({
           These notes are too long for one go — split them into smaller sections.
         </p>
       )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* Generation options — difficulty, counts, language                   */}
+      {/* ----------------------------------------------------------------- */}
+      <div className="flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface px-3 py-3">
+        <OptionChips
+          label="Difficulty"
+          choices={DIFFICULTY_CHOICES}
+          value={options.difficulty}
+          onChange={(difficulty) => setOptions((o) => ({ ...o, difficulty }))}
+          disabled={isGenerating}
+        />
+        <OptionChips
+          label="Flashcards"
+          choices={FLASHCARD_CHOICES.map((n) => ({ value: n, label: String(n) }))}
+          value={options.flashcardCount}
+          onChange={(flashcardCount) => setOptions((o) => ({ ...o, flashcardCount }))}
+          disabled={isGenerating}
+        />
+        <OptionChips
+          label="Quiz"
+          choices={QUIZ_CHOICES.map((n) => ({ value: n, label: String(n) }))}
+          value={options.quizCount}
+          onChange={(quizCount) => setOptions((o) => ({ ...o, quizCount }))}
+          disabled={isGenerating}
+        />
+        <OptionChips
+          label="Language"
+          choices={LANGUAGE_CHOICES}
+          value={options.language}
+          onChange={(language) => setOptions((o) => ({ ...o, language }))}
+          disabled={isGenerating}
+        />
+      </div>
 
       {/* ----------------------------------------------------------------- */}
       {/* Generate button (3-state)                                           */}

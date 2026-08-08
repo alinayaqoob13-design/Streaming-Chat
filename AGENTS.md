@@ -88,7 +88,7 @@ components/
 hooks/
   use-auto-scroll.ts     # Pinned/free auto-scroll logic (threshold 30px, jump-button counting)
 lib/
-  config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, NOTES_SYSTEM_PROMPT, NOTES_FOLLOWUP_SYSTEM_PROMPT,
+  config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, buildNotesSystemPrompt(options), NOTES_FOLLOWUP_SYSTEM_PROMPT,
                          # DEFAULT_MODEL, GENERATION_CONFIG, NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES
   utils.ts               # cn(), formatTime(), generateId(), debounce()
 types/

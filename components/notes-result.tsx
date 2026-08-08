@@ -25,15 +25,17 @@ import { FileText, Layers, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FlashcardsView } from "@/components/flashcards-view";
 import { QuizView } from "@/components/quiz-view";
-import type { StudyNotes } from "@/types/notes";
+import type { StudyNotes, OutputLanguage } from "@/types/notes";
 
 interface NotesResultProps {
   result: StudyNotes;
+  /** "ur" renders the panels right-to-left for Urdu output */
+  language?: OutputLanguage;
 }
 
 type TabId = "summary" | "flashcards" | "quiz";
 
-export function NotesResult({ result }: NotesResultProps) {
+export function NotesResult({ result, language = "en" }: NotesResultProps) {
   const [activeTab, setActiveTab] = useState<TabId>("summary");
 
   const tabs: { id: TabId; label: string; icon: typeof FileText }[] = [
@@ -78,9 +80,13 @@ export function NotesResult({ result }: NotesResultProps) {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Panels — scrollable area                                            */}
+      {/* Panels — scrollable area. dir switches the whole artifact to RTL    */}
+      {/* for Urdu output; the tab bar above stays LTR chrome.                */}
       {/* ----------------------------------------------------------------- */}
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-surface p-4 sm:p-5">
+      <div
+        dir={language === "ur" ? "rtl" : "ltr"}
+        className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-surface p-4 sm:p-5"
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

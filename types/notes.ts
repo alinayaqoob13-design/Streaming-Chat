@@ -42,9 +42,37 @@ export interface SavedStudySet extends StudyNotes {
   title: string; // derived from the first line of the pasted notes
   createdAt: number;
   sourceNotes: string; // original pasted text, needed for follow-up chat
+  language?: OutputLanguage; // absent = "en" (sets saved before this field existed)
 }
 
 // Request body for POST /api/notes
 export interface NotesRequest {
   notes: string;
+  options?: GenerationOptions;
 }
+
+// ---------------------------------------------------------------------------
+// GENERATION OPTIONS
+// ---------------------------------------------------------------------------
+// Student-controlled knobs for /api/notes. Every value is validated/clamped
+// again in the route — the client is only a suggestion.
+
+// easy = simple recall, medium = recall + understanding, hard = application
+export type QuizDifficulty = "easy" | "medium" | "hard";
+
+// en = English, ur = Urdu (اردو) — the result view renders ur right-to-left
+export type OutputLanguage = "en" | "ur";
+
+export interface GenerationOptions {
+  difficulty: QuizDifficulty;
+  flashcardCount: number; // clamped to schema bounds (3..12) in the route
+  quizCount: number; // clamped to schema bounds (2..8) in the route
+  language: OutputLanguage;
+}
+
+export const DEFAULT_GENERATION_OPTIONS: GenerationOptions = {
+  difficulty: "medium",
+  flashcardCount: 8,
+  quizCount: 5,
+  language: "en",
+};

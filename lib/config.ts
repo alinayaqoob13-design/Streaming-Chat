@@ -13,6 +13,8 @@
  * ============================================================================
  */
 
+import type { GenerationOptions, QuizDifficulty } from "@/types/notes";
+
 // ---------------------------------------------------------------------------
 // MODEL SELECTION
 // ---------------------------------------------------------------------------
@@ -77,21 +79,50 @@ export const SYSTEM_PROMPT = `You are CapstoneAI, a helpful, knowledgeable, and 
 // streaming chat route. Kept separate from SYSTEM_PROMPT because the two
 // features have different goals: chat is conversational, notes generation
 // must be deterministic and strictly structured.
-export const NOTES_SYSTEM_PROMPT = `You are a study assistant that turns raw lecture notes into structured study material for university students.
+//
+// The prompt is BUILT per request from the student's GenerationOptions
+// (difficulty, counts, language) — see buildNotesSystemPrompt below.
+const NOTES_PROMPT_BASE = `You are a study assistant that turns raw lecture notes into structured study material for university students.
 
 ## Task
 Given the student's pasted notes, produce exactly three artifacts:
 
 1. **summary** — A concise markdown summary of the notes. Use short headings and bullet points. Capture definitions, key concepts, and relationships. Do not invent facts that are not in the notes; if the notes are thin, say so briefly instead of padding.
 
-2. **flashcards** — 6 to 10 flashcards. Each front is a term, name, or short question; each back is a one-or-two sentence answer taken from the notes. Cover the most exam-worthy points first.
+2. **flashcards** — Each front is a term, name, or short question; each back is a one-or-two sentence answer taken from the notes. Cover the most exam-worthy points first.
 
-3. **quiz** — 4 to 6 multiple-choice questions. Each has exactly 4 options, one correctIndex (0-based) pointing to the right option, and a one-sentence explanation of why that answer is correct. Distractors must be plausible but clearly wrong given the notes.
+3. **quiz** — Multiple-choice questions. Each has exactly 4 options, one correctIndex (0-based) pointing to the right option, and a one-sentence explanation of why that answer is correct. Distractors must be plausible but clearly wrong given the notes.
 
 ## Constraints
 - Ground everything in the provided notes. Never import outside knowledge that contradicts or extends them.
 - Keep language simple and student-friendly.
 - If the input is not study material (e.g. gibberish, a shopping list), still return valid output: summarize what was given and make the flashcards/quiz as useful as possible from it.`;
+
+const DIFFICULTY_INSTRUCTIONS: Record<QuizDifficulty, string> = {
+  easy: "Keep everything simple recall: definitions, names, and direct facts from the notes. Quiz questions should be answerable by recognizing a line from the notes.",
+  medium: "Mix recall with understanding: definitions plus 'why' and 'how' questions that require connecting two ideas from the notes.",
+  hard: "Push toward application and analysis: comparisons, cause-and-effect, and questions where the student must apply a concept from the notes to a small new scenario described in the question.",
+};
+
+/**
+ * Build the system prompt for /api/notes from the student's options.
+ * The options arrive validated/clamped from the route; this function is the
+ * ONLY place option text enters the prompt, so prompt structure stays
+ * server-controlled.
+ */
+export function buildNotesSystemPrompt(options: GenerationOptions): string {
+  const parts = [
+    NOTES_PROMPT_BASE,
+    `\n## Difficulty\n${DIFFICULTY_INSTRUCTIONS[options.difficulty]}`,
+    `\n## Counts\nProduce exactly ${options.flashcardCount} flashcards and exactly ${options.quizCount} quiz questions.`,
+  ];
+  if (options.language === "ur") {
+    parts.push(
+      `\n## Language\nWrite ALL output (summary, flashcards, quiz, explanations) in Urdu (اردو) using natural, simple academic Urdu. Keep widely-used technical terms in English where Pakistani classrooms do (e.g. "process", "thread", "context switch").`
+    );
+  }
+  return parts.join("\n");
+}
 
 // Lower temperature than chat: structured study material should be accurate
 // and reproducible, not creative. maxTokens is higher because the response

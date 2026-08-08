@@ -25,11 +25,13 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import {
   DEFAULT_MODEL,
-  NOTES_SYSTEM_PROMPT,
+  buildNotesSystemPrompt,
   NOTES_GENERATION_CONFIG,
   NOTES_INPUT_LIMITS,
   ERROR_MESSAGES,
 } from "@/lib/config";
+import type { GenerationOptions } from "@/types/notes";
+import { DEFAULT_GENERATION_OPTIONS } from "@/types/notes";
 
 // ---------------------------------------------------------------------------
 // RESPONSE SCHEMA
@@ -71,7 +73,7 @@ function jsonError(message: string, status: number) {
 
 /**
  * POST /api/notes
- * Body: { notes: string }
+ * Body: { notes: string, options?: GenerationOptions }
  * Returns: StudyNotes JSON (summary, flashcards, quiz)
  */
 export async function POST(req: NextRequest) {
@@ -97,7 +99,29 @@ export async function POST(req: NextRequest) {
     }
 
     // -----------------------------------------------------------------------
-    // 2. Check API key configuration
+    // 2. Validate generation options — whitelist enums, clamp counts into the
+    //    zod schema's bounds so the prompt can never ask for what the schema
+    //    would reject. Anything missing or malformed falls back to defaults.
+    // -----------------------------------------------------------------------
+    const raw = (body?.options ?? {}) as Partial<GenerationOptions>;
+    const clampInt = (v: unknown, min: number, max: number, fallback: number) =>
+      typeof v === "number" && Number.isFinite(v)
+        ? Math.min(max, Math.max(min, Math.round(v)))
+        : fallback;
+
+    const options: GenerationOptions = {
+      difficulty: ["easy", "medium", "hard"].includes(raw.difficulty as string)
+        ? (raw.difficulty as GenerationOptions["difficulty"])
+        : DEFAULT_GENERATION_OPTIONS.difficulty,
+      flashcardCount: clampInt(raw.flashcardCount, 3, 12, DEFAULT_GENERATION_OPTIONS.flashcardCount),
+      quizCount: clampInt(raw.quizCount, 2, 8, DEFAULT_GENERATION_OPTIONS.quizCount),
+      language: ["en", "ur"].includes(raw.language as string)
+        ? (raw.language as GenerationOptions["language"])
+        : DEFAULT_GENERATION_OPTIONS.language,
+    };
+
+    // -----------------------------------------------------------------------
+    // 3. Check API key configuration
     // -----------------------------------------------------------------------
     if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       console.error("[API/notes] GOOGLE_GENERATIVE_AI_API_KEY is not configured");
@@ -105,23 +129,23 @@ export async function POST(req: NextRequest) {
     }
 
     // -----------------------------------------------------------------------
-    // 3. Generate structured study material
+    // 4. Generate structured study material
     // -----------------------------------------------------------------------
     // generateObject forces the model to conform to the zod schema; if the
     // model returns invalid JSON the SDK retries/repairs before throwing.
     const { object, usage } = await generateObject({
       model: google(DEFAULT_MODEL),
-      system: NOTES_SYSTEM_PROMPT,
+      system: buildNotesSystemPrompt(options),
       prompt: `Here are the student's notes:\n\n${trimmed}`,
       schema: studyNotesSchema,
       maxTokens: NOTES_GENERATION_CONFIG.maxTokens,
       temperature: NOTES_GENERATION_CONFIG.temperature,
     });
 
-    console.log(`[API/notes] Generated study set. Usage: ${JSON.stringify(usage)}`);
+    console.log(`[API/notes] Generated study set (${options.difficulty}, ${options.flashcardCount}fc/${options.quizCount}q, ${options.language}). Usage: ${JSON.stringify(usage)}`);
 
     // -----------------------------------------------------------------------
-    // 4. Return the validated artifact
+    // 5. Return the validated artifact
     // -----------------------------------------------------------------------
     return new Response(JSON.stringify(object), {
       status: 200,

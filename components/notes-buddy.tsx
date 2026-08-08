@@ -33,7 +33,7 @@ import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
 import { NotesHistory } from "@/components/notes-history";
 import { generateId } from "@/lib/utils";
-import type { StudyNotes, SavedStudySet } from "@/types/notes";
+import { DEFAULT_GENERATION_OPTIONS, type StudyNotes, type SavedStudySet, type GenerationOptions, type OutputLanguage } from "@/types/notes";
 
 type BuddyStatus = "input" | "generating" | "result" | "error";
 
@@ -81,6 +81,8 @@ export function NotesBuddy() {
   const [lastNotes, setLastNotes] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [savedSets, setSavedSets] = useState<SavedStudySet[]>([]);
+  // Language of the currently displayed set — drives RTL rendering
+  const [resultLanguage, setResultLanguage] = useState<OutputLanguage>(DEFAULT_GENERATION_OPTIONS.language);
   // Guard against hydration mismatch: localStorage is read only after mount
   const [hasMounted, setHasMounted] = useState(false);
 
@@ -89,7 +91,7 @@ export function NotesBuddy() {
     setHasMounted(true);
   }, []);
 
-  const handleGenerate = useCallback(async (notes: string) => {
+  const handleGenerate = useCallback(async (notes: string, options: GenerationOptions) => {
     setStatus("generating");
     setError(null);
     setLastNotes(notes);
@@ -98,7 +100,7 @@ export function NotesBuddy() {
       const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes }),
+        body: JSON.stringify({ notes, options }),
       });
 
       const data = await res.json();
@@ -112,6 +114,7 @@ export function NotesBuddy() {
 
       const studyNotes = data as StudyNotes;
       setResult(studyNotes);
+      setResultLanguage(options.language);
       setStatus("result");
 
       // Persist the set (newest first, capped) — reopening is free
@@ -122,6 +125,7 @@ export function NotesBuddy() {
           title: deriveTitle(notes),
           createdAt: Date.now(),
           sourceNotes: notes,
+          language: options.language,
         };
         const next = [saved, ...prev].slice(0, MAX_SAVED_SETS);
         saveSetsToStorage(next);
@@ -151,6 +155,7 @@ export function NotesBuddy() {
   const handleOpenSet = useCallback((set: SavedStudySet) => {
     setResult({ summary: set.summary, flashcards: set.flashcards, quiz: set.quiz });
     setLastNotes(set.sourceNotes);
+    setResultLanguage(set.language ?? "en");
     setError(null);
     setChatOpen(false);
     setStatus("result");
@@ -213,7 +218,7 @@ export function NotesBuddy() {
               New notes
             </button>
           </div>
-          <NotesResult result={result} />
+          <NotesResult result={result} language={resultLanguage} />
 
           {/* Follow-up chat — collapsible so it doesn't crowd the tabs.
               key={lastNotes} forces a remount per study set: a conversation
