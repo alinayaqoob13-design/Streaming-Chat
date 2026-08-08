@@ -20,11 +20,19 @@ function typeNotes(text: string) {
 }
 
 describe("NotesInput", () => {
-  it("shows the guidance card while the textarea is empty", () => {
+  it("shows the hero empty state while the textarea is empty", () => {
     render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
-    expect(screen.getByText(/Paste your lecture notes below/i)).toBeInTheDocument();
+    expect(screen.getByText(/Turn lecture notes into/i)).toBeInTheDocument();
     // "Flashcards" also appears as an options label — assert at least one exists
     expect(screen.getAllByText("Flashcards").length).toBeGreaterThan(0);
+  });
+
+  it("fills the textarea with sample notes in one click", () => {
+    render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
+    fireEvent.click(screen.getByRole("button", { name: /try with sample notes/i }));
+    const textarea = screen.getByLabelText("Lecture notes") as HTMLTextAreaElement;
+    expect(textarea.value.length).toBeGreaterThan(30);
+    expect(screen.getByRole("button", { name: /generate study material/i })).toBeEnabled();
   });
 
   it("keeps Generate disabled with empty input", () => {
@@ -94,11 +102,12 @@ describe("NotesInput", () => {
     ).toBeInTheDocument();
   });
 
-  it("locks the textarea and shows the generating state while in flight", () => {
+  it("locks the textarea and shows the staged progress while in flight", () => {
     render(<NotesInput onGenerate={vi.fn()} isGenerating={true} initialNotes={LONG_ENOUGH} />);
     expect(screen.getByLabelText("Lecture notes")).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: /generating study material/i })
-    ).toBeInTheDocument();
+    // The Generate button swaps out for the staged progress list
+    expect(screen.queryByRole("button", { name: /generate study material/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: /generation progress/i })).toBeInTheDocument();
+    expect(screen.getByText(/Reading your notes/i)).toBeInTheDocument();
   });
 });

@@ -25,7 +25,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Loader2, FileText, Layers, ListChecks } from "lucide-react";
+import { Sparkles, Loader2, FileText, Layers, ListChecks, Check, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_GENERATION_OPTIONS,
@@ -37,6 +37,67 @@ import {
 // Mirrors NOTES_INPUT_LIMITS in lib/config.ts (server-only, not importable here).
 const MIN_CHARS = 30;
 const MAX_CHARS = 15000;
+
+// One-click demo notes — lets anyone (including an examiner) try the app
+// without hunting for text to paste.
+const SAMPLE_NOTES = `Operating Systems — Lecture 7: Processes and Threads
+
+A process is a program in execution. Each process has its own address space containing the code, data, heap, and stack segments. The OS manages processes using a Process Control Block (PCB), which stores the process ID, program counter, register values, and scheduling information.
+
+Process states: New, Ready, Running, Waiting, and Terminated. A context switch saves the state of one process into its PCB and loads another; it is pure overhead.
+
+Threads are lightweight execution units within a process. Threads share code, data, and heap, but each has its own stack and registers — making thread switching much cheaper than process switching.
+
+Multithreading benefits: responsiveness, resource sharing, economy, and scalability on multi-core systems.`;
+
+// Steps shown while Gemini works — turns a 4-5s wait into visible progress
+const GENERATING_STEPS = [
+  "Reading your notes",
+  "Writing the summary",
+  "Building flashcards",
+  "Creating the quiz",
+];
+
+/** Staged progress indicator for the generating state. Purely cosmetic —
+    timing is illustrative, the API resolves whenever it resolves. */
+function GeneratingSteps() {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setCurrent((c) => Math.min(c + 1, GENERATING_STEPS.length - 1)),
+      1300
+    );
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <motion.ul
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="flex flex-col gap-2 rounded-xl border border-border bg-surface-elevated p-4"
+      aria-live="polite"
+      aria-label="Generation progress"
+    >
+      {GENERATING_STEPS.map((step, i) => (
+        <li key={step} className="flex items-center gap-2.5 text-sm">
+          {i < current ? (
+            <Check size={15} className="shrink-0 text-success" />
+          ) : i === current ? (
+            <Loader2 size={15} className="shrink-0 animate-spin text-accent" />
+          ) : (
+            <span className="h-[15px] w-[15px] shrink-0 rounded-full border border-border" />
+          )}
+          <span className={i <= current ? "text-text-primary" : "text-text-muted"}>
+            {step}
+            {i === current ? "…" : ""}
+          </span>
+        </li>
+      ))}
+    </motion.ul>
+  );
+}
 
 // Chip choices — the route clamps anything outside the schema bounds anyway
 const DIFFICULTY_CHOICES: { value: QuizDifficulty; label: string }[] = [
@@ -148,7 +209,8 @@ export function NotesInput({
   return (
     <div className="flex w-full flex-col gap-4">
       {/* ----------------------------------------------------------------- */}
-      {/* Empty-state guidance card — visible until the student pastes text  */}
+      {/* Hero empty state — the first impression. Serif headline, what the   */}
+      {/* tool produces, and a one-click sample so anyone can try it instantly*/}
       {/* ----------------------------------------------------------------- */}
       <AnimatePresence>
         {showEmptyState && (
@@ -157,25 +219,38 @@ export function NotesInput({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            className="rounded-xl border border-border bg-surface p-4 sm:p-5"
+            className="flex flex-col items-center gap-4 rounded-xl border border-border bg-surface px-4 py-8 text-center sm:px-8"
           >
-            <p className="mb-3 text-sm text-text-secondary">
-              Paste your lecture notes below and get three study artifacts:
+            <h2 className="font-display text-2xl font-semibold leading-snug text-text-primary sm:text-3xl">
+              Turn lecture notes into
+              <br />
+              <span className="text-accent">exam prep.</span>
+            </h2>
+            <p className="max-w-md text-sm leading-relaxed text-text-secondary">
+              Paste your notes below and get three study artifacts, grounded only
+              in what you pasted — nothing invented.
             </p>
-            <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <li className="flex items-center gap-2 rounded-lg bg-surface-elevated px-3 py-2.5">
+            <ul className="grid w-full max-w-lg grid-cols-1 gap-2 sm:grid-cols-3">
+              <li className="flex items-center justify-center gap-2 rounded-lg bg-surface-elevated px-3 py-2.5">
                 <FileText size={16} className="shrink-0 text-accent" />
                 <span className="text-sm text-text-primary">Summary</span>
               </li>
-              <li className="flex items-center gap-2 rounded-lg bg-surface-elevated px-3 py-2.5">
+              <li className="flex items-center justify-center gap-2 rounded-lg bg-surface-elevated px-3 py-2.5">
                 <Layers size={16} className="shrink-0 text-accent" />
                 <span className="text-sm text-text-primary">Flashcards</span>
               </li>
-              <li className="flex items-center gap-2 rounded-lg bg-surface-elevated px-3 py-2.5">
+              <li className="flex items-center justify-center gap-2 rounded-lg bg-surface-elevated px-3 py-2.5">
                 <ListChecks size={16} className="shrink-0 text-accent" />
                 <span className="text-sm text-text-primary">Quiz</span>
               </li>
             </ul>
+            <button
+              onClick={() => setNotes(SAMPLE_NOTES)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <Wand2 size={15} />
+              Try with sample notes
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -260,54 +335,31 @@ export function NotesInput({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Generate button (3-state)                                           */}
+      {/* Generate button (3-state) — replaced by staged progress while       */}
+      {/* generating, so the 4-5s wait reads as visible work                  */}
       {/* ----------------------------------------------------------------- */}
-      <motion.button
-        onClick={handleGenerate}
-        disabled={buttonState !== "ready"}
-        className={cn(
-          "flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-medium transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface",
-          "disabled:cursor-not-allowed",
-          buttonState === "idle" && "bg-surface-elevated text-text-muted",
-          buttonState === "ready" && "bg-accent text-on-accent hover:bg-accent-hover",
-          buttonState === "generating" && "bg-surface-elevated text-accent"
-        )}
-        whileTap={buttonState === "ready" ? { scale: 0.98 } : {}}
-        aria-label={
-          buttonState === "generating"
-            ? "Generating study material…"
-            : "Generate study material"
-        }
-      >
-        <AnimatePresence mode="wait">
-          {buttonState === "generating" ? (
-            <motion.span
-              key="generating"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="flex items-center gap-2"
-            >
-              <Loader2 size={18} className="animate-spin" />
-              Generating — this takes a few seconds…
-            </motion.span>
-          ) : (
-            <motion.span
-              key="idle-ready"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="flex items-center gap-2"
-            >
-              <Sparkles size={18} />
-              Generate study material
-            </motion.span>
+      {buttonState === "generating" ? (
+        <GeneratingSteps />
+      ) : (
+        <motion.button
+          onClick={handleGenerate}
+          disabled={buttonState !== "ready"}
+          className={cn(
+            "flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-medium transition-colors duration-200",
+            "focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface",
+            "disabled:cursor-not-allowed",
+            buttonState === "idle" && "bg-surface-elevated text-text-muted",
+            buttonState === "ready" && "bg-accent text-on-accent hover:bg-accent-hover"
           )}
-        </AnimatePresence>
-      </motion.button>
+          whileTap={buttonState === "ready" ? { scale: 0.98 } : {}}
+          aria-label="Generate study material"
+        >
+          <span className="flex items-center gap-2">
+            <Sparkles size={18} />
+            Generate study material
+          </span>
+        </motion.button>
+      )}
     </div>
   );
 }
