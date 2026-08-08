@@ -24,3 +24,7 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
+
+# build artifacts & local test screenshots
+tsconfig.tsbuildinfo
+images/
