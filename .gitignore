@@ -28,3 +28,4 @@ yarn-error.log*
 # build artifacts & local test screenshots
 tsconfig.tsbuildinfo
 images/
+coverage/
