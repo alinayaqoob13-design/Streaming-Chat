@@ -4,9 +4,11 @@ Guidance for AI coding agents working in this repository. Assumes no prior knowl
 
 ## Project Overview
 
-A production-grade **streaming chat interface** built as the central AI interaction for a 2026 Frontend Engineering capstone. It is a single-page chat app: the user talks to an LLM (Google Gemini) and responses stream token-by-token over SSE. Key features: robust auto-scroll, a 5-state send/stop/regenerate button, streaming-safe markdown, thinking-indicator-to-token handoff, localStorage persistence, mobile-first responsive design, and Framer Motion animations that respect `prefers-reduced-motion`.
+The home page is the **AI Study Notes Buddy** (2026 Frontend Engineering capstone): paste lecture notes — or import a .txt/.md file — and Google Gemini returns a summary, flashcards, and a quiz as schema-validated JSON. The artifacts are tabbed (Summary | Flashcards | Quiz), with flashcard practice + spaced-repetition study modes, an interactive quiz, weak-areas tracking, follow-up chat grounded only in the notes, localStorage persistence (key `capstone-study-sets`), .json backup/import, an installable PWA service worker, view transitions, and a daily study streak. Mobile-first, dark-only "dusty rose on black" design, Framer Motion animations that respect `prefers-reduced-motion`.
 
-There is **no database, no auth, and no server-side persistence** — conversation history lives only in the browser's `localStorage` (key: `capstone-chat-history`).
+The repo also keeps the **legacy streaming chat** building blocks (`ChatContainer`, `/api/chat`, `useAutoScroll`) — still functional, no longer the entry point.
+
+There is **no database and no auth** — conversation/study-set history lives only in the browser's `localStorage`.
 
 ## Tech Stack
 
@@ -44,11 +46,17 @@ Environment variables (see `.env.example`):
 
 ```bash
 npx tsc --noEmit
+npm test                 # Vitest + React Testing Library suite
+npm run build            # production build (also worth a smoke test)
 ```
 
 ## Testing Strategy
 
-There is **no test suite** — no test runner, no test files, no CI configuration. Verification is manual:
+The test suite lives in `tests/` and runs on Vitest + React Testing Library (jsdom). It covers the notes API route (mocked AI SDK, zero tokens), all interactive components (options chips, quiz scoring, practice mode, tabs, history, follow-up chat, streak logic), and every lib helper. It does NOT cover the legacy streaming chat or the new PWA pieces (viewport/install require real browser tooling).
+
+New behavior is expected to ship with a test in `tests/` following the existing patterns (`vi.mock` the AI SDK / `useChat`; assert on rendered role/name queries). `npm test` must stay green before finishing a change.
+
+Manual verification (dev server) still matters for streaming/scroll feel:
 
 1. `npm run dev`, open http://localhost:3000
 2. Send a message and confirm tokens stream visibly
@@ -68,32 +76,56 @@ app/
                          # via generateObject + zod schema (NOT streamed); GET is a health check
   api/notes/chat/route.ts# Follow-up chat about a study set: POST { notes, messages }, streams via
                          # streamText; notes are embedded in the system prompt server-side
-  page.tsx               # Main page, renders ChatContainer
-  layout.tsx             # Root layout + metadata
-  globals.css            # Tailwind v4 import + @theme design tokens + keyframes
+  api/notes/explain/route.ts # "Explain differently": POST { notes, card } -> simpler rewrite
+  manifest.ts            # PWA web app manifest (standalone display, theme, icons)
+  study-set/[id]/page.tsx# Deep-link route: loads a saved set from localStorage by id; 404 if missing
+  page.tsx               # Main page, renders NotesBuddy
+  layout.tsx             # Root layout + metadata + ServiceWorkerRegister
+  globals.css            # Tailwind v4 import + @theme design tokens + keyframes + view-transition CSS
 components/
-  chat-container.tsx     # Orchestrator: useChat + useAutoScroll + localStorage persistence + stop/regenerate
-  chat-message.tsx       # Single message, streaming-safe markdown heuristic
-  chat-input.tsx         # Input bar with 5-state button state machine
   notes-buddy.tsx        # Study Notes Buddy orchestrator: state machine + localStorage persistence
                          # (key: capstone-study-sets, newest first, capped at 20, hydration-guarded)
-  notes-input.tsx        # Notes textarea + 3-state Generate button + empty-state guidance card
-  notes-history.tsx      # Saved study sets list: reopen (free, no API call) or delete per row
-  notes-result.tsx       # Tabbed artifact view: Summary | Flashcards | Quiz (pinned tab bar, scrolling panel,
-                         # dir=rtl for Urdu output)
-  flashcards-view.tsx    # Flip-card deck with two modes: browse (arrow-key nav) and practice
-                         # (shuffle, know/don't-know, missed cards re-queued once, session score)
-  quiz-view.tsx          # Interactive MCQ quiz: lock-on-answer, instant feedback, live score, retake
-  notes-chat.tsx         # Follow-up chat panel for a study set (useChat + /api/notes/chat, simple stick-to-bottom)
+                         # + undo-delete toast (8s), .json import, view transitions between screens
+  notes-input.tsx        # Notes textarea (accepts pasted text OR a .txt/.md file), options chips,
+                         # 3-state Generate button + empty-state guidance card
+  notes-history.tsx      # Saved study sets list: live search, reopen (free, no API call), per-row
+                         # .json export, restore-backup import (strict validation), delete
+  notes-result.tsx       # Tabbed artifact view: Summary | Flashcards | Quiz (pinned tab bar, scrolling
+                         # panel, dir=rtl for Urdu output)
+  flashcards-view.tsx    # Flip-card deck: browse (arrow keys + live front/back search), practice
+                         # (shuffle, 1/2 marks, missed cards re-queued once, session score), study
+                         # (SRS: 1/2/3 = Again/Good/Easy, due-card chip); Space to flip
+  quiz-view.tsx          # Interactive MCQ quiz: lock-on-answer, instant feedback, live score, retake,
+                         # keys 1-9 answer next open question, Space jumps to it
+  notes-chat.tsx         # Follow-up chat panel for a study set (useChat + /api/notes/chat, simple
+                         # stick-to-bottom)
+  weak-areas-view.tsx    # Most-missed cards/questions, jumps back to the exact item
+  stats-view.tsx         # Total flashcards + quiz questions across all saved sets (input-screen tile)
+  streak-display.tsx     # Daily study streak chip (lib/streak.ts)
+  service-worker-register.tsx # Registers public/sw.js (production only, silent failures)
+  chat-container.tsx     # Legacy chat orchestrator (useChat + useAutoScroll, localStorage persistence)
+  chat-message.tsx       # Legacy single message, streaming-safe markdown heuristic
+  chat-input.tsx         # Legacy input bar with 5-state button state machine
   thinking-indicator.tsx # Animated pre-token "thinking" state
   scroll-anchor.tsx      # Floating "jump to latest" button with count badge
 hooks/
   use-auto-scroll.ts     # Pinned/free auto-scroll logic (threshold 30px, jump-button counting)
 lib/
-  config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, buildNotesSystemPrompt(options), NOTES_FOLLOWUP_SYSTEM_PROMPT,
-                         # DEFAULT_MODEL, GENERATION_CONFIG, NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES
-  export-notes.ts        # studySetToMarkdown + downloadMarkdown — client-side export, zero tokens
+  config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, buildNotesSystemPrompt(options),
+                         # NOTES_FOLLOWUP_SYSTEM_PROMPT, DEFAULT_MODEL, GENERATION_CONFIG,
+                         # NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES,
+                         # EXPLAIN_SYSTEM_PROMPT
+  export-notes.ts        # studySetToMarkdown + summaryToText + downloadMarkdown/downloadText/downloadJson
+  view-transition.ts     # withViewTransition() — View Transition API wrapper (graceful, reduced-motion aware)
+  explain-cache.ts       # 60s TTL Map cache for the explain-differently endpoint (API quota shield)
+  srs.ts                 # Simplified SM-2: ratings, due logic, miss counting
+  weak-areas.ts          # Weak Areas aggregation (threshold 2, most-missed-first)
+  streak.ts              # Daily streak: local date keys, one count/day, best-streak tracking
   utils.ts               # cn(), formatTime(), generateId(), debounce()
+public/
+  sw.js                  # Service worker: offline app shell (network-first) + stale-while-revalidate
+                         # assets; /api/* is NEVER cached; bump CACHE on policy changes
+  icons/                 # PWA icons: icon-192.png, icon-512.png, icon-512-maskable.png
 types/
   chat.ts                # Shared interfaces (ChatMessage, ConversationState, ScrollBehavior)
   notes.ts               # Study Notes Buddy types (StudyNotes, Flashcard, QuizQuestion, SavedStudySet)
