@@ -20,24 +20,37 @@
  * Persistence: every successful generation is saved to localStorage as a
  * SavedStudySet (newest first, capped) and can be reopened from the input
  * screen without spending a single token. There is no server-side storage.
+ * A daily study streak (lib/streak.ts, key capstone-streak) is counted on
+ * each successful generation — one per local calendar day.
+ *
+ * Layout (Phase 7): the input screen is a Bento grid — a dominant primary
+ * tile (NotesInput) with a supporting rail (streak + recent study sets) on
+ * xl, collapsing to one column below 1280px. The result screen is a
+ * full-width surface tile. Structure-only: child components are unchanged.
  * ============================================================================
  */
 
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp, Download, Printer } from "lucide-react";
+import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp, Download, Printer, Check, Undo2 } from "lucide-react";
 import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
 import { NotesHistory } from "@/components/notes-history";
+import { useRouter, usePathname } from "next/navigation";
+
 import { generateId } from "@/lib/utils";
 import { studySetToMarkdown, downloadMarkdown } from "@/lib/export-notes";
-import { DEFAULT_GENERATION_OPTIONS, type StudyNotes, type SavedStudySet, type GenerationOptions, type OutputLanguage } from "@/types/notes";
-
+import { withViewTransition } from "@/lib/view-transition";
+import { getLocalDateKey, loadStreak, saveStreak, recordStudyDay, EMPTY_STREAK, type StreakState } from "@/lib/streak";
+import { StreakDisplay } from "@/components/streak-display";
+import { StatsView } from "@/components/stats-view";
+import { DEFAULT_GENERATION_OPTIONS, type StudyNotes, type SavedStudySet, type GenerationOptions, type OutputLanguage, type Flashcard, type QuizQuestion } from "@/types/notes";
+import { AppShell } from "@/components/app-shell/app-shell";
 type BuddyStatus = "input" | "generating" | "result" | "error";
 
 // ---------------------------------------------------------------------------
@@ -76,25 +89,72 @@ function deriveTitle(notes: string): string {
   return firstLine.length > 60 ? firstLine.slice(0, 60) + "…" : firstLine;
 }
 
-export function NotesBuddy() {
+export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) {
   const [status, setStatus] = useState<BuddyStatus>("input");
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [savedSets, setSavedSets] = useState<SavedStudySet[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const successTimerRef = useRef<number | null>(null);
   const [result, setResult] = useState<StudyNotes | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Kept so a failed generation can restore the student's text into the input
   const [lastNotes, setLastNotes] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
-  const [savedSets, setSavedSets] = useState<SavedStudySet[]>([]);
+  const router = useRouter();
+  const pathname = usePathname();
+  // Helper to open a set, optionally updating the URL
+  // back into this set (and through it into localStorage). null = result not
+  // tied to a saved set (e.g. mid-cleanup), ratings then update view state only.
+  const [activeSetId, setActiveSetId] = useState<string | null>(null);
   // Language of the currently displayed set — drives RTL rendering
   const [resultLanguage, setResultLanguage] = useState<OutputLanguage>(DEFAULT_GENERATION_OPTIONS.language);
+  // Daily study streak — null until mount (hydration guard); the chip only
+  // renders once this holds a real value, so server HTML never differs.
+  const [streak, setStreak] = useState<StreakState | null>(null);
   // Guard against hydration mismatch: localStorage is read only after mount
   const [hasMounted, setHasMounted] = useState(false);
+  // Undo-delete toast: the removed set is stashed for 8 seconds so an
+  // accidental trash-tap is recoverable (see handleUndoDelete).
+  const [undoToast, setUndoToast] = useState<{ setId: string; title: string } | null>(null);
+  const undoStashRef = useRef<SavedStudySet | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
 
+  // Clear the undo window on unmount so no timer fires into a dead component
   useEffect(() => {
-    setSavedSets(loadSetsFromStorage());
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  // Hydration guard: anything that reads localStorage must not render on the
+  // server, otherwise server HTML and client HTML differ.
+  useEffect(() => {
     setHasMounted(true);
   }, []);
 
+  // Open set from URL on initial mount (no navigation push)
+  useEffect(() => {
+    if (!hasMounted) return;
+    if (initialSetId && !activeSetId) {
+      const set = savedSets.find((s) => s.id === initialSetId);
+      if (set) {
+        openSet(set, false);
+      }
+    }
+  }, [hasMounted, initialSetId, activeSetId, savedSets]);
+
   const handleGenerate = useCallback(async (notes: string, options: GenerationOptions) => {
+    // Reset any prior success indicator when starting a new generation
+    setShowSuccess(false);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
     setStatus("generating");
     setError(null);
     setLastNotes(notes);
@@ -109,6 +169,9 @@ export function NotesBuddy() {
       const data = await res.json();
 
       if (!res.ok) {
+        // API returned an error – clear any success indicator
+        setShowSuccess(false);
+        if (successTimerRef.current) clearTimeout(successTimerRef.current);
         // The API always returns { error: "<friendly copy>" } on failure
         setError(typeof data?.error === "string" ? data.error : "Something went wrong. Please try again in a moment.");
         setStatus("error");
@@ -116,24 +179,48 @@ export function NotesBuddy() {
       }
 
       const studyNotes = data as StudyNotes;
-      setResult(studyNotes);
-      setResultLanguage(options.language);
-      setStatus("result");
+      // Persist the set (newest first, capped) — reopening is free.
+      // The id is computed here so the SRS layer can target this set later.
+      const setId = generateId();
 
-      // Persist the set (newest first, capped) — reopening is free
-      setSavedSets((prev) => {
-        const saved: SavedStudySet = {
-          ...studyNotes,
-          id: generateId(),
-          title: deriveTitle(notes),
-          createdAt: Date.now(),
-          sourceNotes: notes,
-          language: options.language,
-        };
-        const next = [saved, ...prev].slice(0, MAX_SAVED_SETS);
-        saveSetsToStorage(next);
-        return next;
+      // The whole input→result switch rides one view transition when the
+      // browser supports it (see lib/view-transition.ts) — React batches
+      // these updates into a single repaint, so the crossfade captures the
+      // real screen change.
+      withViewTransition(() => {
+        setResult(studyNotes);
+        setResultLanguage(options.language);
+        setStatus("result");
+        setActiveSetId(setId);
+        setSavedSets((prev) => {
+          const saved: SavedStudySet = {
+            ...studyNotes,
+            id: setId,
+            title: deriveTitle(notes),
+            createdAt: Date.now(),
+            sourceNotes: notes,
+            language: options.language,
+          };
+          const next = [saved, ...prev].slice(0, MAX_SAVED_SETS);
+          saveSetsToStorage(next);
+          return next;
+        });
+
+        // Daily streak — a successful generation counts as a study day.
+        // recordStudyDay is idempotent per local calendar day, so smashing
+        // the Generate button repeatedly never inflates the count.
+        setStreak((prev) => {
+          const next = recordStudyDay(prev ?? EMPTY_STREAK, getLocalDateKey());
+          saveStreak(next);
+          return next;
+        });
       });
+
+      // Trigger success indicator
+      setShowSuccess(true);
+      // Clear any existing timer
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = window.setTimeout(() => setShowSuccess(false), 1000);
     } catch {
       // Network failure — fetch itself threw
       setError("Could not reach the server. Check your connection and try again.");
@@ -142,38 +229,162 @@ export function NotesBuddy() {
   }, []);
 
   const handleRetry = useCallback(() => {
-    setError(null);
-    setStatus("input");
+    withViewTransition(() => {
+      setError(null);
+      setStatus("input");
+      setActiveSetId(null);
+    });
+    setShowSuccess(false);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
   }, []);
 
   const handleNewNotes = useCallback(() => {
     setResult(null);
     setLastNotes("");
     setError(null);
-    setStatus("input");
+    setShowSuccess(false);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    withViewTransition(() => {
+      setStatus("input");
+      setActiveSetId(null);
+    });
+    router.push(`/`);
   }, []);
 
   // Reopen a saved set — no API call, everything renders from localStorage.
   // sourceNotes restores the follow-up chat's grounding too.
+  const openSet = (set: SavedStudySet, pushUrl: boolean = true) => {
+    withViewTransition(() => {
+      setResult({ summary: set.summary, flashcards: set.flashcards, quiz: set.quiz });
+      setLastNotes(set.sourceNotes);
+      setResultLanguage(set.language ?? "en");
+      setError(null);
+      setChatOpen(false);
+      setActiveSetId(set.id);
+      setStatus("result");
+    });
+    if (pushUrl) {
+      router.push(`/study-set/${set.id}`);
+    }
+  };
+
+  const handleDeleteSet = useCallback(
+    (id: string) => {
+      // Deleting the set on screen detaches SRS writes from storage
+      // If we're viewing the set we just deleted, kick back to the input screen
+      if (id === activeSetId) {
+        setActiveSetId(null);
+        setStatus("input");
+        setResult(null);
+        setLastNotes("");
+      }
+      
+      // Stash the victim + open the Undo window (8s) BEFORE persisting, so a
+      // misplaced tap is never final — restore puts the set back on top.
+      const victim = savedSets.find((s) => s.id === id) ?? null;
+      undoStashRef.current = victim;
+      const next = savedSets.filter((s) => s.id !== id);
+      saveSetsToStorage(next);
+      setSavedSets(next);
+      if (victim) {
+        setUndoToast({ setId: id, title: victim.title });
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = window.setTimeout(() => setUndoToast(null), 8000);
+      }
+    },
+    [activeSetId, savedSets]
+  );
+
   const handleOpenSet = useCallback((set: SavedStudySet) => {
-    setResult({ summary: set.summary, flashcards: set.flashcards, quiz: set.quiz });
-    setLastNotes(set.sourceNotes);
-    setResultLanguage(set.language ?? "en");
-    setError(null);
-    setChatOpen(false);
-    setStatus("result");
+    openSet(set);
   }, []);
 
-  const handleDeleteSet = useCallback((id: string) => {
+  // Restore the stashed set (if it wasn't deleted again meanwhile) back to the
+  // top of the list. Cap still applies so the list never exceeds its budget.
+  const handleUndoDelete = useCallback(() => {
+    const victim = undoStashRef.current;
+    if (!victim) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
     setSavedSets((prev) => {
-      const next = prev.filter((s) => s.id !== id);
+      if (prev.some((s) => s.id === victim.id)) return prev;
+      const next = [victim, ...prev].slice(0, MAX_SAVED_SETS);
+      saveSetsToStorage(next);
+      return next;
+    });
+  }, []);
+  // A .json backup was restored via NotesHistory — dedupe by id (re-importing
+  // the same file updates the stored copy instead of duplicating it) and cap.
+  const handleImportSet = useCallback((set: SavedStudySet) => {
+    setSavedSets((prev) => {
+      const withoutDuplicate = prev.filter((s) => s.id !== set.id);
+      const next = [set, ...withoutDuplicate].slice(0, MAX_SAVED_SETS);
       saveSetsToStorage(next);
       return next;
     });
   }, []);
 
+  // Phase 6 SRS: a flashcard was rated in the study (SRS) mode. Update both
+  // the on-screen result and the matching saved set, persisting back to the
+  // existing capstone-study-sets key — ratings survive reloads.
+  const handleRateCard = useCallback((index: number, updated: Flashcard) => {
+    setResult((prev) => {
+      if (!prev || index < 0 || index >= prev.flashcards.length) return prev;
+      return {
+        ...prev,
+        flashcards: prev.flashcards.map((c, i) => (i === index ? updated : c)),
+      };
+    });
+    setSavedSets((prev) => {
+      if (!activeSetId) return prev;
+      const next = prev.map((s) =>
+        s.id === activeSetId
+          ? { ...s, flashcards: s.flashcards.map((c, i) => (i === index ? updated : c)) }
+          : s
+      );
+      saveSetsToStorage(next);
+      return next;
+    });
+  }, [activeSetId]);
+
+  // Phase 6B: a quiz question was answered wrong. Increment its missCount in
+  // the view state and the matching saved set (same persistence path as SRS
+  // ratings) — feeds the Weak Areas tab.
+  const handleMissQuestion = useCallback((index: number) => {
+    const bump = (q: QuizQuestion) => ({ ...q, missCount: (q.missCount ?? 0) + 1 });
+    setResult((prev) => {
+      if (!prev || index < 0 || index >= prev.quiz.length) return prev;
+      return { ...prev, quiz: prev.quiz.map((q, i) => (i === index ? bump(q) : q)) };
+    });
+    setSavedSets((prev) => {
+      if (!activeSetId) return prev;
+      const next = prev.map((s) =>
+        s.id === activeSetId ? { ...s, quiz: s.quiz.map((q, i) => (i === index ? bump(q) : q)) } : s
+      );
+      saveSetsToStorage(next);
+      return next;
+    });
+  }, [activeSetId]);
+
   return (
-    <div className="flex w-full flex-1 flex-col gap-4 overflow-hidden rounded-xl border border-border bg-surface p-4 sm:p-6">
+  <AppShell
+        savedSets={savedSets}
+        activeSetId={activeSetId}
+        onOpenSet={handleOpenSet}
+        onNewSet={handleNewNotes}
+      >
+      {status === "input" && (
+        <div className="mb-2 shrink-0 px-2">
+          <h2 className="font-display text-2xl font-semibold text-text-primary hidden lg:block">
+            Study Workspace
+          </h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Paste lecture notes — get a summary, flashcards &amp; a quiz
+          </p>
+        </div>
+      )}
+
+      <div className="flex w-full flex-1 flex-col gap-4 overflow-hidden">
       {/* ----------------------------------------------------------------- */}
       {/* Error banner — friendly API message + retry, notes are preserved    */}
       {/* ----------------------------------------------------------------- */}
@@ -207,8 +418,22 @@ export function NotesBuddy() {
       {/* Result mode pins the title row + tab bar; only the panel scrolls,   */}
       {/* so "New notes" and the tabs are always reachable on long content.   */}
       {/* ----------------------------------------------------------------- */}
+       {status === "result" && showSuccess && (
+         <motion.div
+           initial={{ opacity: 0, scale: 0.8 }}
+           animate={{ opacity: 1, scale: 1 }}
+           exit={{ opacity: 0, scale: 0.8 }}
+           className="fixed inset-0 flex items-center justify-center pointer-events-none"
+         >
+           <Check size={48} className="text-success shadow-[0_0_12px_var(--color-accent-glow)]" />
+         </motion.div>
+       )}
+
       {status === "result" && result ? (
-        <>
+        /* Result screen — a full-width surface tile (same box as the old
+           single-panel chrome, now one of several Bento tiles). flex column
+           + min-h-0 keep NotesResult's internal scroll architecture intact. */
+        <div className="flex min-h-0 flex-col rounded-xl border border-border bg-surface p-4 sm:p-6">
           <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-base font-semibold text-text-primary">
               Your study material
@@ -245,7 +470,7 @@ export function NotesBuddy() {
               </button>
             </div>
           </div>
-          <NotesResult result={result} language={resultLanguage} />
+          <NotesResult result={result} language={resultLanguage} title={deriveTitle(lastNotes)} sourceNotes={lastNotes} onRateCard={handleRateCard} onMissQuestion={handleMissQuestion} />
 
           {/* Follow-up chat — collapsible so it doesn't crowd the tabs.
               key={lastNotes} forces a remount per study set: a conversation
@@ -312,24 +537,85 @@ export function NotesBuddy() {
               ))}
             </ol>
           </div>
-        </>
+        </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <NotesInput
-            onGenerate={handleGenerate}
-            isGenerating={status === "generating"}
-            initialNotes={lastNotes}
-          />
-          {/* Saved study sets — only after mount (hydration guard) */}
-          {hasMounted && (
-            <NotesHistory
-              sets={savedSets}
-              onOpen={handleOpenSet}
-              onDelete={handleDeleteSet}
+        /* -----------------------------------------------------------------
+           BENTO GRID (input screen)
+           One dominant primary tile + a supporting rail on xl (1280px+);
+           single column below that, input first, streak, then history.
+           Structure only — every child keeps its existing internals.
+           ----------------------------------------------------------------- */
+        <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4 overflow-y-auto xl:grid-cols-12 xl:gap-6">
+          {/* PRIMARY TILE — the visual anchor: textarea + options + Generate.
+              items-stretch above makes the tile the full row height, so the
+              input workspace (and its textarea, see NotesInput) absorbs the
+              available vertical space instead of sitting at a fixed size. */}
+          <div className="flex flex-col rounded-xl border border-border bg-surface p-4 sm:p-6 xl:col-span-7">
+            <NotesInput
+              onGenerate={handleGenerate}
+              isGenerating={status === "generating"}
+              initialNotes={lastNotes}
             />
-          )}
+          </div>
+
+          {/* SUPPORTING RAIL — streak, stats, then recent study sets. Kept at
+              its natural height — the rail only ever holds its own content,
+              never stretches to match the primary tile. */}
+          <div className="flex flex-col gap-4 self-start xl:col-span-5 xl:gap-6">
+            {hasMounted && streak && (
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <StreakDisplay streak={streak} />
+              </div>
+            )}
+            {hasMounted && (
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <StatsView sets={savedSets} />
+              </div>
+            )}
+            {/* Tile hides while there is nothing to list (NotesHistory itself
+                returns null on empty — the tile follows suit) */}
+            {hasMounted && savedSets.length > 0 && (
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <NotesHistory
+                  sets={savedSets}
+                  onOpen={handleOpenSet}
+                  onDelete={handleDeleteSet}
+                  onImport={handleImportSet}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    {/* ----------------------------------------------------------------- */}
+      {/* Undo-delete toast — 8s window after a trash tap. Fixed, bottom-     */}
+      {/* center, above everything; the mobile nav bar sits below it on the   */}
+      {/* chat app, but this screen is reachable from both experiences.       */}
+      {/* ----------------------------------------------------------------- */}
+      <AnimatePresence>
+        {undoToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            role="status"
+            className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-border bg-surface-elevated px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.45)]"
+          >
+            <p className="max-w-[60vw] truncate text-sm text-text-primary">
+              Deleted "<span className="font-medium">{undoToast.title}</span>"
+            </p>
+            <button
+              onClick={handleUndoDelete}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent/15 px-3 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent/25 focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <Undo2 size={14} />
+              Undo
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </div>
+    </AppShell>
   );
 }
