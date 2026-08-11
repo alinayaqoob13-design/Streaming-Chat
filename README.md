@@ -15,7 +15,7 @@ Paste your lecture notes → get a **summary**, **flashcards**, and a **quiz** �
 - **Follow-up chat** — streaming Q&A grounded in the pasted notes only; the notes are embedded into the system prompt server-side so answers can't drift to outside knowledge
 - **Export** — download the full set as Markdown, the summary as a plain .txt, or print / save-as-PDF a clean light-on-white handout
 - **History** — every generated set is saved to localStorage (cap 20) and reopens with zero tokens spent; live search filters by title or flashcard term; deletion is never final — an 8-second Undo toast brings the set back
-- **Backup & sharing** — each history row can export a .json backup of the set; a "Restore backup" button re-imports it (strict validation, dedup by id) so sets transfer between devices for free
+- **Backup & sharing** — each history row can export a .json backup of the set; a "Restore backup" button re-imports it (strict validation, dedup by id); plus a one-click **shareable link** (`/share?s=<base64>`) that lets anyone import the set without a backend
 - **Daily streak** — each day with a successful generation extends a consecutive-day counter (one count per local calendar day, DST-safe); the chip shows your current streak, best streak, and a nudge when today isn't logged yet
 - **Study stats** — a tile on the input screen totals your flashcards and quiz questions across all saved sets
 - **Keyboard shortcuts** — flashcards: Space flips, arrows navigate, 1/2/3 (or 1/2) rate recall and practice; quiz: 1–9 answer the next open question, Space jumps to it
@@ -52,6 +52,7 @@ app/
   api/notes/explain/route.ts # POST: "explain differently" rewrite of a card
   manifest.ts             # PWA web app manifest (installable, theme, icons)
   study-set/[id]/page.tsx # Deep-link route: opens a saved set by id from localStorage; 404 if missing
+  share/page.tsx          # Import a study set shared via a /share?s=<base64> link
   page.tsx                # Home — renders NotesBuddy
   globals.css             # Tailwind v4 @theme tokens (dusty-rose-on-black), print stylesheet, view transitions
   layout.tsx              # Fonts, metadata, service-worker registration
@@ -66,6 +67,7 @@ components/
   weak-areas-view.tsx     # Weak Areas panel — most-missed items with jump-to-review links
   notes-chat.tsx          # Follow-up chat panel (useChat + /api/notes/chat)
   notes-history.tsx       # Saved sets: search, reopen, export .json, delete (undo via NotesBuddy), restore backup
+  share-button.tsx        # Copies a /share?s=<base64> link for the current study set
   service-worker-register.tsx # Production-only /sw.js registration (tiny, silent failures)
   chat-*.tsx, thinking-indicator.tsx, scroll-anchor.tsx  # Legacy streaming chat building blocks
 hooks/
@@ -73,6 +75,7 @@ hooks/
 lib/
   config.ts               # SINGLE SOURCE OF TRUTH: prompts, model, generation config, error copy
   export-notes.ts         # studySetToMarkdown + summaryToText + download helpers (client-side)
+  share-link.ts           # encode/decode a SavedStudySet into a URL-safe base64 payload
   view-transition.ts      # withViewTransition() — graceful View Transition API wrapper
   srs.ts                  # Simplified SM-2 scheduler: ratings, due logic, miss counting
   weak-areas.ts           # Weak Areas aggregation: threshold + most-missed-first sort
@@ -149,6 +152,7 @@ What's covered: API route validation + prompt building + security headers (mocke
 - PWA: `npm run build && npm run start` → Lighthouse installable; offline reload of the app shell works; API routes stay uncached
 - Streak chip: first generation starts a 1-day streak, a second generation the same day doesn't double it, next-day generation extends it, and a missed day resets it — all while the longest streak stays put; streak survives refresh
 - Deep links: clicking a history row updates the URL to `/study-set/:id`; copying and reopening that URL restores the same set; a bad/missing id shows a 404 screen
+- Shareable link: the result header has a Share button that copies `/share?s=<base64>`; opening the link shows a preview and an Import button; corrupt/missing payloads show an invalid-link screen
 - Splash appears once per session/tab (~2s, sessionStorage `hasSeenSplash`); reload in the same tab skips it; a new tab may show it again; reduced motion collapses the animation to a plain fade
 - Onboarding: the first ever visit shows a 3-step welcome (Paste & generate / Study the smart way / Track & chat) with Next/Back, Skip, Escape, and a one-word "Start studying" finish; skipping or finishing sets localStorage `capstone-onboarding-done`, so it never reappears
 - Usable at phone width (320px+); keyboard navigable; reduced motion respected

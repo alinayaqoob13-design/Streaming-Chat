@@ -41,6 +41,7 @@ import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
 import { NotesHistory } from "@/components/notes-history";
+import { ShareButton } from "@/components/share-button";
 import { useRouter, usePathname } from "next/navigation";
 
 import { generateId } from "@/lib/utils";
@@ -439,6 +440,10 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
               Your study material
             </h2>
             <div className="flex items-center gap-2">
+              {/* Share — zero-backend URL that anyone can import */}
+              {activeSetId && savedSets.find((s) => s.id === activeSetId) && (
+                <ShareButton studySet={savedSets.find((s) => s.id === activeSetId)!} />
+              )}
               {/* Export — markdown download + print-to-PDF, both free/local */}
               <button
                 onClick={() =>

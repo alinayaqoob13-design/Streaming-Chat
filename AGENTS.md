@@ -79,6 +79,7 @@ app/
   api/notes/explain/route.ts # "Explain differently": POST { notes, card } -> simpler rewrite
   manifest.ts            # PWA web app manifest (standalone display, theme, icons)
   study-set/[id]/page.tsx# Deep-link route: loads a saved set from localStorage by id; 404 if missing
+  share/page.tsx         # Import a study set shared via a /share?s=<base64> link
   page.tsx               # Main page, renders NotesBuddy
   layout.tsx             # Root layout + metadata + ServiceWorkerRegister
   globals.css            # Tailwind v4 import + @theme design tokens + keyframes + view-transition CSS
@@ -102,6 +103,7 @@ components/
   weak-areas-view.tsx    # Most-missed cards/questions, jumps back to the exact item
   stats-view.tsx         # Total flashcards + quiz questions across all saved sets (input-screen tile)
   streak-display.tsx     # Daily study streak chip (lib/streak.ts)
+  share-button.tsx       # Copies a /share?s=<base64> link for the current study set
   service-worker-register.tsx # Registers public/sw.js (production only, silent failures)
   chat-container.tsx     # Legacy chat orchestrator (useChat + useAutoScroll, localStorage persistence)
   chat-message.tsx       # Legacy single message, streaming-safe markdown heuristic
@@ -116,8 +118,8 @@ lib/
                          # NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES,
                          # EXPLAIN_SYSTEM_PROMPT
   export-notes.ts        # studySetToMarkdown + summaryToText + downloadMarkdown/downloadText/downloadJson
+  share-link.ts          # encode/decode a SavedStudySet into a URL-safe base64 payload
   view-transition.ts     # withViewTransition() — View Transition API wrapper (graceful, reduced-motion aware)
-  explain-cache.ts       # 60s TTL Map cache for the explain-differently endpoint (API quota shield)
   srs.ts                 # Simplified SM-2: ratings, due logic, miss counting
   weak-areas.ts          # Weak Areas aggregation (threshold 2, most-missed-first)
   streak.ts              # Daily streak: local date keys, one count/day, best-streak tracking
