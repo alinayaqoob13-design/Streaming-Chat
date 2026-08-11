@@ -72,7 +72,7 @@ export function StatsView({ sets, onStartMixedPractice }: StatsViewProps) {
         {totalQuiz > 0 && onStartMixedPractice && (
           <button
             onClick={onStartMixedPractice}
-            className="text-xs font-medium text-accent transition-colors hover:text-accent-hover focus:outline-none focus:underline"
+            className="rounded text-xs font-medium text-accent transition-colors hover:text-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface"
           >
             Mixed practice →
           </button>

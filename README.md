@@ -2,7 +2,7 @@
 
 Paste your lecture notes → get a **summary**, **flashcards**, and a **quiz** — then practice them, export them, and ask follow-up questions that are answered strictly from your own notes. Built with Next.js 15, the Vercel AI SDK, and Google Gemini for the 2026 Frontend Engineering capstone.
 
-**Live app:** _<your Vercel URL>_
+**Live app:** _<replace with your Vercel production URL after deploy>_
 
 ## Features
 
@@ -42,6 +42,25 @@ Get a free Gemini key at https://aistudio.google.com/apikey — no credit card r
 | --- | --- | --- |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Yes | Gemini API key — **server-side only**, never exposed to the client |
 | `GOOGLE_MODEL` | No | Override default model (default: `gemini-3.1-flash-lite`) |
+
+## Deployment & operation
+
+- See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the pre/post-deploy checklist, health checks, failure modes, and rollback plan.
+- See [`REFLECTION.md`](./REFLECTION.md) for the capstone reflection template.
+
+## Accessibility & performance audit
+
+Run these on the **deployed production URL** (mobile matters):
+
+1. **Lighthouse** (Chrome DevTools → Lighthouse → Mobile)
+   - Targets: Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, SEO ≥ 90
+2. **axe DevTools** or **WAVE**
+   - Scan the home page, result screen, `/study-set/:id`, `/share`, and `/mixed-practice`
+   - Goal: zero WCAG 2.1 AA violations
+3. **Manual keyboard test**
+   - Tab through every screen; every interactive element must have a visible focus indicator
+   - Flashcards: Space flips, arrows walk, 1/2/3 rate
+   - Quiz: 1–9 answers, Space jumps
 
 ## Architecture
 
