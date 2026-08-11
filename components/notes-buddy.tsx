@@ -574,7 +574,7 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
             )}
             {hasMounted && (
               <div className="rounded-xl border border-border bg-surface p-4">
-                <StatsView sets={savedSets} />
+                <StatsView sets={savedSets} onStartMixedPractice={() => router.push("/mixed-practice")} />
               </div>
             )}
             {/* Tile hides while there is nothing to list (NotesHistory itself

@@ -80,6 +80,7 @@ app/
   manifest.ts            # PWA web app manifest (standalone display, theme, icons)
   study-set/[id]/page.tsx# Deep-link route: loads a saved set from localStorage by id; 404 if missing
   share/page.tsx         # Import a study set shared via a /share?s=<base64> link
+  mixed-practice/page.tsx# Combined quiz session pulled from all saved sets
   page.tsx               # Main page, renders NotesBuddy
   layout.tsx             # Root layout + metadata + ServiceWorkerRegister
   globals.css            # Tailwind v4 import + @theme design tokens + keyframes + view-transition CSS

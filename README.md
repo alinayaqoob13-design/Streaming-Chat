@@ -17,7 +17,8 @@ Paste your lecture notes → get a **summary**, **flashcards**, and a **quiz** �
 - **History** — every generated set is saved to localStorage (cap 20) and reopens with zero tokens spent; live search filters by title or flashcard term; deletion is never final — an 8-second Undo toast brings the set back
 - **Backup & sharing** — each history row can export a .json backup of the set; a "Restore backup" button re-imports it (strict validation, dedup by id); plus a one-click **shareable link** (`/share?s=<base64>`) that lets anyone import the set without a backend
 - **Daily streak** — each day with a successful generation extends a consecutive-day counter (one count per local calendar day, DST-safe); the chip shows your current streak, best streak, and a nudge when today isn't logged yet
-- **Study stats** — a tile on the input screen totals your flashcards and quiz questions across all saved sets
+- **Study stats** — a tile on the input screen totals your flashcards and quiz questions across all saved sets, with a one-click **Mixed practice** button
+- **Mixed practice** — a `/mixed-practice` page builds a shuffled quiz from every saved set's questions; wrong answers are recorded back on the source set so Weak Areas stays accurate
 - **Keyboard shortcuts** — flashcards: Space flips, arrows navigate, 1/2/3 (or 1/2) rate recall and practice; quiz: 1–9 answer the next open question, Space jumps to it
 - **File import** — Generate accepts pasted text or a .txt/.md file (contents populate the textarea first, so you can still edit before generating)
 - **Explain differently** — any flashcard or quiz question can re-ask the model for a simpler, more memorable explanation (new window-cached endpoint result, shown inline)
@@ -53,6 +54,7 @@ app/
   manifest.ts             # PWA web app manifest (installable, theme, icons)
   study-set/[id]/page.tsx # Deep-link route: opens a saved set by id from localStorage; 404 if missing
   share/page.tsx          # Import a study set shared via a /share?s=<base64> link
+  mixed-practice/page.tsx # Combined quiz session pulled from all saved sets
   page.tsx                # Home — renders NotesBuddy
   globals.css             # Tailwind v4 @theme tokens (dusty-rose-on-black), print stylesheet, view transitions
   layout.tsx              # Fonts, metadata, service-worker registration
@@ -153,6 +155,7 @@ What's covered: API route validation + prompt building + security headers (mocke
 - Streak chip: first generation starts a 1-day streak, a second generation the same day doesn't double it, next-day generation extends it, and a missed day resets it — all while the longest streak stays put; streak survives refresh
 - Deep links: clicking a history row updates the URL to `/study-set/:id`; copying and reopening that URL restores the same set; a bad/missing id shows a 404 screen
 - Shareable link: the result header has a Share button that copies `/share?s=<base64>`; opening the link shows a preview and an Import button; corrupt/missing payloads show an invalid-link screen
+- Mixed practice: the stats tile links to `/mixed-practice`, which serves a shuffled quiz from all saved sets and records misses on the source sets
 - Splash appears once per session/tab (~2s, sessionStorage `hasSeenSplash`); reload in the same tab skips it; a new tab may show it again; reduced motion collapses the animation to a plain fade
 - Onboarding: the first ever visit shows a 3-step welcome (Paste & generate / Study the smart way / Track & chat) with Next/Back, Skip, Escape, and a one-word "Start studying" finish; skipping or finishing sets localStorage `capstone-onboarding-done`, so it never reappears
 - Usable at phone width (320px+); keyboard navigable; reduced motion respected
