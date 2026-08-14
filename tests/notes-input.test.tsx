@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { NotesInput } from "@/components/notes-input";
 import { DEFAULT_GENERATION_OPTIONS } from "@/types/notes";
 
@@ -198,41 +198,51 @@ describe("NotesInput", () => {
     expect(screen.getByRole("button", { name: /generate study material/i })).toBeDisabled();
   });
 
-  it("highlights the matching preview card when an artifact button is clicked (Phase 9)", () => {
+  it("switches the tabbed preview when an artifact tab is clicked (Phase 12)", () => {
     render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
 
-    const summaryBtn = screen.getByRole("button", { name: /^summary$/i });
-    const flashcardsBtn = screen.getByRole("button", { name: /^flashcards$/i });
-    const quizBtn = screen.getByRole("button", { name: /^quiz$/i });
+    // Summary is the default tab
+    expect(screen.getByText(/Hash tables use key-value pairs/i)).toBeInTheDocument();
 
-    // No selection initially — all cards at full opacity, none scaled
-    const summaryCard = screen.getByLabelText("Summary preview");
-    const flashcardCard = screen.getByRole("button", { name: /flip flashcard/i });
-    const quizCard = screen.getByLabelText("Quiz preview");
-    [summaryCard, flashcardCard, quizCard].forEach((card) =>
-      expect(card.className).not.toContain("opacity-60")
-    );
+    fireEvent.click(screen.getByRole("tab", { name: /flashcards/i }));
+    expect(screen.getByText(/What is a Hash Table\?/i)).toBeInTheDocument();
 
-    // Selecting Summary emphasizes its card and dims the other two
-    fireEvent.click(summaryBtn);
-    expect(summaryBtn).toHaveAttribute("aria-pressed", "true");
-    expect(summaryCard.className).toContain("scale-[1.02]");
-    expect(summaryCard.className).toContain("border-accent/60");
-    expect(flashcardCard.className).toContain("opacity-60");
-    expect(quizCard.className).toContain("opacity-60");
-    expect(flashcardsBtn).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("tab", { name: /^quiz$/i }));
+    expect(screen.getByText(/Which sorting algorithm/i)).toBeInTheDocument();
 
-    // Switching to Flashcards moves the emphasis
-    fireEvent.click(flashcardsBtn);
-    expect(flashcardCard.className).toContain("scale-[1.02]");
-    expect(summaryCard.className).toContain("opacity-60");
+    fireEvent.click(screen.getByRole("tab", { name: /^summary$/i }));
+    expect(screen.getByText(/Hash tables use key-value pairs/i)).toBeInTheDocument();
+  });
 
-    // Clicking the active button again deselects — everything returns
-    fireEvent.click(flashcardsBtn);
-    expect(flashcardsBtn).toHaveAttribute("aria-pressed", "false");
-    expect(flashcardCard.className).not.toContain("scale-[1.02]");
-    expect(flashcardCard.className).not.toContain("opacity-60");
-    expect(summaryCard.className).not.toContain("opacity-60");
+  it("lets the mini quiz be answered with right/wrong feedback", () => {
+    render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
+    fireEvent.click(screen.getByRole("tab", { name: /^quiz$/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Bubble Sort" }));
+    expect(screen.getByText(/Not quite — Merge Sort/i)).toBeInTheDocument();
+    // Options lock after one attempt, like the real quiz
+    expect(screen.getByRole("button", { name: "Merge Sort" })).toBeDisabled();
+  });
+
+  it("auto-cycles the preview until the user picks a tab", () => {
+    vi.useFakeTimers();
+    try {
+      render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
+      expect(screen.getByText(/Hash tables use key-value pairs/i)).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(4000));
+      expect(screen.getByText(/What is a Hash Table\?/i)).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(4000));
+      expect(screen.getByText(/Which sorting algorithm/i)).toBeInTheDocument();
+
+      // User takes over — the cycle must stop permanently
+      fireEvent.click(screen.getByRole("tab", { name: /^summary$/i }));
+      act(() => vi.advanceTimersByTime(12000));
+      expect(screen.getByText(/Hash tables use key-value pairs/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows the compact How-it-works strip in hero mode and hides it in compose mode", async () => {

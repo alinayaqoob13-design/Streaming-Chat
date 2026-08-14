@@ -35,7 +35,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
-import { Sparkles, Loader2, FileText, Layers, ListChecks, Check, Wand2, RotateCcw, Upload, ClipboardPaste, ChevronRight, BarChart3, ChevronLeft } from "lucide-react";
+import { Sparkles, Loader2, FileText, Layers, ListChecks, Check, Wand2, Upload, ClipboardPaste, ChevronRight, BarChart3, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractTextFromFile, ACCEPTED_FILE_TYPES } from "@/lib/file-import";
 import {
@@ -157,15 +157,9 @@ function GeneratingSteps() {
 }
 
 // ---------------------------------------------------------------------------
-// SAMPLE PREVIEW — Phase 5
+// PREVIEW ARTIFACT TABS
 // ---------------------------------------------------------------------------
-// A purely visual mini-preview showing what the generated output looks like.
-// Helps first-time users understand the value before pasting their notes.
-//
-// Phase 9: the Summary/Flashcards/Quiz buttons above (ARTIFACT_TABS) select
-// an active artifact — the matching card scales up + gains an accent border
-// while the other two dim to 60%. Purely informational: the selection never
-// touches the compose view's options state.
+// The three artifact kinds shown in the hero's tabbed live preview below.
 
 type ArtifactKind = "summary" | "flashcards" | "quiz";
 
@@ -175,136 +169,189 @@ const ARTIFACT_TABS: { kind: ArtifactKind; label: string; icon: typeof FileText 
   { kind: "quiz", label: "Quiz", icon: ListChecks },
 ];
 
-function SamplePreview({ active }: { active: ArtifactKind | null }) {
-  const [flipped, setFlipped] = useState(false);
+// ---------------------------------------------------------------------------
+// TABBED LIVE PREVIEW — Phase 12 (Option B + auto-cycle)
+// ---------------------------------------------------------------------------
+// ONE interactive preview card instead of 3 buttons + 3 static cards: the
+// Summary/Flashcards/Quiz tabs switch the card's content in place (gliding
+// accent pill, same language as NotesResult's tab bar). Until the user picks
+// a tab, the card auto-cycles through all three artifacts every 4s, so the
+// hero feels alive ("the app is working") without any fake-typing gimmicks.
+// The mini quiz options are actually answerable — nothing on the hero is a
+// dead control. Reduced-motion: no auto-cycle, instant swaps.
 
-  // Emphasis classes shared by every preview card: the selected one scales
-  // up and picks up the accent glow, unselected cards dim. CSS transitions
-  // (with motion-reduce opt-out) keep this lightweight and accessible.
-  const cardClass = (kind: ArtifactKind) =>
-    cn(
-      "transition-all duration-200 motion-reduce:transition-none",
-      active === kind
-        ? "scale-[1.02] border-accent/60 shadow-[0_0_12px_var(--color-accent-glow)]"
-        : active === null
-          ? "opacity-100"
-          : "opacity-60"
-    );
+const PREVIEW_CYCLE_ORDER: ArtifactKind[] = ["summary", "flashcards", "quiz"];
+const PREVIEW_CYCLE_MS = 4000;
+const PREVIEW_QUIZ_OPTIONS = ["Bubble Sort", "Merge Sort", "Selection Sort", "Insertion Sort"];
+const PREVIEW_QUIZ_CORRECT = 1; // Merge Sort
+
+function TabbedPreview() {
+  const [active, setActive] = useState<ArtifactKind>("summary");
+  // Once the user picks a tab, the auto-cycle hands over control permanently
+  const [userTouched, setUserTouched] = useState(false);
+  const [flipped, setFlipped] = useState(false);
+  const [answered, setAnswered] = useState<number | null>(null);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (userTouched || reduceMotion) return;
+    const timer = setInterval(() => {
+      setActive((a) => PREVIEW_CYCLE_ORDER[(PREVIEW_CYCLE_ORDER.indexOf(a) + 1) % PREVIEW_CYCLE_ORDER.length]);
+    }, PREVIEW_CYCLE_MS);
+    return () => clearInterval(timer);
+  }, [userTouched, reduceMotion]);
+
+  const pick = (kind: ArtifactKind) => {
+    setUserTouched(true);
+    setActive(kind);
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.15 }}
-      className="flex w-full max-w-lg flex-col gap-3"
-    >
-      <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted text-center">
+    <div className="flex w-full max-w-md flex-col items-center gap-3">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
         Preview — what you&apos;ll get
       </p>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {/* --- Mini summary (Phase 9) — third artifact card so every button
-            above has a matching preview. Static like the quiz card. --- */}
-        <div
-          aria-label="Summary preview"
-          className={cn(
-            "flex min-h-[100px] flex-col gap-2 rounded-xl border border-border bg-surface-elevated p-4 text-left",
-            cardClass("summary")
-          )}
-        >
-          <div className="flex items-center gap-1.5">
-            <FileText size={14} className="text-accent" />
-            <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-              Summary
-            </span>
-          </div>
-          <p className="text-xs font-medium leading-relaxed text-text-primary line-clamp-2">
-            Hash tables use key-value pairs for O(1) average lookups — ideal
-            for fast data retrieval.
-          </p>
-        </div>
-
-        {/* --- Mini flashcard --- */}
-        <button
-          onClick={() => setFlipped((f) => !f)}
-          aria-label={flipped ? "Show flashcard front" : "Flip flashcard"}
-          className={cn(
-            "group relative flex min-h-[100px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface-elevated p-4 text-center hover:border-accent/40 hover:shadow-[0_0_12px_var(--color-accent-glow)]",
-            cardClass("flashcards")
-          )}
-        >
-          <Layers size={14} className="text-accent" />
-          <AnimatePresence mode="wait">
-            {flipped ? (
-              <motion.div
-                key="back"
-                initial={{ rotateY: 90, opacity: 0 }}
-                animate={{ rotateY: 0, opacity: 1 }}
-                exit={{ rotateY: -90, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-              >
-                <p className="text-xs leading-relaxed text-text-primary">
-                  A data structure that stores key-value pairs and uses a hash function for O(1) average lookups.
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="front"
-                initial={{ rotateY: -90, opacity: 0 }}
-                animate={{ rotateY: 0, opacity: 1 }}
-                exit={{ rotateY: 90, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-              >
-                <p className="text-sm font-medium text-text-primary">
-                  What is a Hash Table?
-                </p>
-                <p className="mt-1 text-[10px] text-text-muted">
-                  tap to flip
-                </p>
-              </motion.div>
+      {/* Tab bar — gliding accent pill, same pattern as the result view */}
+      <div
+        role="tablist"
+        aria-label="Artifact preview"
+        className="flex items-center gap-1 rounded-xl border border-border bg-surface-elevated p-1"
+      >
+        {ARTIFACT_TABS.map(({ kind, label, icon: Icon }) => (
+          <button
+            key={kind}
+            role="tab"
+            aria-selected={active === kind}
+            onClick={() => pick(kind)}
+            className={cn(
+              "relative inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-colors duration-150",
+              "focus:outline-none focus:ring-2 focus:ring-accent",
+              active === kind ? "font-medium text-on-accent" : "text-text-secondary hover:text-text-primary"
             )}
-          </AnimatePresence>
-          <RotateCcw
-            size={10}
-            className="absolute bottom-2 right-2 text-text-muted opacity-0 transition-opacity group-hover:opacity-60"
-          />
-        </button>
-
-        {/* --- Mini quiz question --- */}
-        <div
-          aria-label="Quiz preview"
-          className={cn(
-            "flex min-h-[100px] flex-col gap-2 rounded-xl border border-border bg-surface-elevated p-4",
-            cardClass("quiz")
-          )}
-        >
-          <div className="flex items-center gap-1.5">
-            <ListChecks size={14} className="text-accent" />
-            <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-              Quiz
+          >
+            {active === kind && (
+              <motion.span
+                layoutId="heroPreviewPill"
+                className="absolute inset-0 rounded-lg bg-accent"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+              />
+            )}
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              <Icon size={13} />
+              {label}
             </span>
-          </div>
-          <p className="text-xs font-medium text-text-primary">
-            Which sorting algorithm has the best average-case time complexity?
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {["Bubble Sort", "Merge Sort", "Selection Sort", "Insertion Sort"].map(
-              (opt, i) => (
-                <span
-                  key={opt}
-                  className={cn(
-                    "rounded-md px-2 py-0.5 text-[10px]",
-                    i === 1
-                      ? "bg-accent/20 font-semibold text-accent"
-                      : "bg-surface text-text-muted"
-                  )}
-                >
-                  {opt}
+          </button>
+        ))}
+      </div>
+
+      {/* The single preview card — content swaps in place with a quick
+          fade-up (no exit phase, so swaps never lag) */}
+      <div className="min-h-[190px] w-full rounded-xl border border-border bg-surface-elevated p-5">
+        <motion.div
+          key={active}
+          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18 }}
+          role="tabpanel"
+          aria-label={`${active} preview`}
+        >
+          {active === "summary" && (
+            <div className="flex flex-col gap-2 text-left">
+              <div className="flex items-center gap-1.5">
+                <FileText size={14} className="text-accent" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                  Summary
                 </span>
-              )
-            )}
-          </div>
-        </div>
+              </div>
+              <p className="text-sm font-medium leading-relaxed text-text-primary">
+                Hash tables use key-value pairs for O(1) average lookups
+              </p>
+              <ul className="flex flex-col gap-1 text-xs leading-relaxed text-text-secondary">
+                <li>• Hash function maps keys to bucket indices</li>
+                <li>• Collisions handled via chaining or open addressing</li>
+                <li>• Load factor controls when the table resizes</li>
+              </ul>
+            </div>
+          )}
+
+          {active === "flashcards" && (
+            <button
+              onClick={() => setFlipped((f) => !f)}
+              aria-label={flipped ? "Show flashcard front" : "Flip flashcard"}
+              className="group flex min-h-[140px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg text-center transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Layers size={14} className="text-accent" />
+              <AnimatePresence mode="wait">
+                {flipped ? (
+                  <motion.span
+                    key="back"
+                    initial={{ rotateY: 90, opacity: 0 }}
+                    animate={{ rotateY: 0, opacity: 1 }}
+                    exit={{ rotateY: -90, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="text-xs leading-relaxed text-text-primary"
+                  >
+                    A data structure that stores key-value pairs and uses a hash function for O(1) average lookups.
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="front"
+                    initial={{ rotateY: -90, opacity: 0 }}
+                    animate={{ rotateY: 0, opacity: 1 }}
+                    exit={{ rotateY: 90, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <span className="block text-sm font-medium text-text-primary">
+                      What is a Hash Table?
+                    </span>
+                    <span className="mt-1 block text-[10px] text-text-muted">tap to flip</span>
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          )}
+
+          {active === "quiz" && (
+            <div className="flex flex-col gap-2 text-left">
+              <div className="flex items-center gap-1.5">
+                <ListChecks size={14} className="text-accent" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                  Quiz
+                </span>
+              </div>
+              <p className="text-sm font-medium text-text-primary">
+                Which sorting algorithm has the best average-case time complexity?
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {PREVIEW_QUIZ_OPTIONS.map((opt, i) => (
+                  <button
+                    key={opt}
+                    onClick={() => setAnswered(i)}
+                    disabled={answered !== null}
+                    className={cn(
+                      "press rounded-md px-2.5 py-1 text-[11px] transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      answered === null && "bg-surface text-text-secondary hover:bg-border hover:text-text-primary",
+                      answered !== null && i === PREVIEW_QUIZ_CORRECT && "bg-success/15 font-medium text-success",
+                      answered !== null && i === answered && i !== PREVIEW_QUIZ_CORRECT && "bg-danger/15 text-danger",
+                      answered !== null && i !== answered && i !== PREVIEW_QUIZ_CORRECT && "bg-surface text-text-muted"
+                    )}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              {answered !== null && (
+                <p className={cn("text-[11px]", answered === PREVIEW_QUIZ_CORRECT ? "text-success" : "text-danger")}>
+                  {answered === PREVIEW_QUIZ_CORRECT
+                    ? "Correct — Merge Sort averages O(n log n)."
+                    : "Not quite — Merge Sort averages O(n log n)."}
+                </p>
+              )}
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* --- How it works (Phase 9) — compact informational strip for
@@ -326,7 +373,7 @@ function SamplePreview({ active }: { active: ArtifactKind | null }) {
           Study &amp; track progress
         </span>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -429,16 +476,12 @@ export function NotesInput({
     }
   }, [notes]);
 
-  // ---- Hero preview selection (Phase 9) ------------------------------------
-  // Purely visual: which artifact button is highlighted and which preview
-  // card is emphasized. Independent of the compose-view options state.
-  const [activeArtifact, setActiveArtifact] = useState<ArtifactKind | null>(null);
-
-  // ---- Compose-back state (Phase 9/10) ------------------------------------
-  // Tracks whether the user has unsaved notes in the textarea while in compose mode.
-  // When the user clicks "Back to Home", if there are unsaved notes we ask for
-  // confirmation before discarding the draft. The textarea value is always preserved
-  // in local state, so re-entering compose mode later recovers the draft.
+  // ---- Unsaved-draft tracking ----------------------------------------------
+  // True while the textarea holds text the user hasn't generated from yet.
+  // "Back to Home" asks for confirmation only when this is set; on confirm the
+  // draft is CLEARED (that is what reliably brings the hero back — the hero
+  // requires an empty textarea), so a misplaced click can never silently eat
+  // typed notes.
   const [hasUnsavedNotes, setHasUnsavedNotes] = useState(false);
 
   // ---- File import state ---------------------------------------------------
@@ -589,43 +632,16 @@ export function NotesInput({
                 <br />
                 <span className="text-accent">exam prep.</span>
               </h2>
-            <div
-              role="group"
-              aria-label="Choose an artifact preview"
-              className="grid w-full max-w-lg grid-cols-1 gap-2 sm:grid-cols-3"
-            >
-              {ARTIFACT_TABS.map(({ kind, label, icon: Icon }) => {
-                const isActive = activeArtifact === kind;
-                return (
-                  <button
-                    key={kind}
-                    onClick={() =>
-                      setActiveArtifact((prev) => (prev === kind ? null : kind))
-                    }
-                    aria-pressed={isActive}
-                    className={cn(
-                      "press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                      isActive
-                        ? "border-2 border-accent bg-accent font-semibold text-on-accent shadow-[0_0_12px_var(--color-accent-glow)]"
-                        : "border-2 border-transparent bg-surface-elevated text-text-secondary hover:bg-border hover:text-text-primary"
-                    )}
-                  >
-                    <Icon size={16} className={cn("shrink-0", !isActive && "text-accent")} />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
 
-            <p className="max-w-md text-sm leading-relaxed text-text-secondary pt-4">
+            <p className="max-w-md text-sm leading-relaxed text-text-secondary">
               Paste your notes below and get three study artifacts, grounded only
               in what you pasted — nothing invented.
             </p>
 
-            {/* --- Sample preview (Phase 5/9) — cards respond to the artifact
-                buttons above via the active prop --- */}
-            <SamplePreview active={activeArtifact} />
+            {/* --- Tabbed live preview (Phase 12) — one interactive card
+                with auto-cycling tabs replaces the old 3 buttons + 3 static
+                cards. Less clutter, nothing on the hero is a dead control. --- */}
+            <TabbedPreview />
 
             <button
               onClick={() => {
