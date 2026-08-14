@@ -232,7 +232,72 @@ body {
   }
 }
 
-/* Reduced motion */
+/* View transitions — crossfade + rise when the browser supports the API
+   (Safari queued behind a flag; everywhere that has it, has it). Both
+   pseudo-elements are handled so old-page fades out while new-page fades
+   in over it; reduced-motion users skip animations entirely via the media
+   query below (the global reduced-motion rule at the file's end would
+   already zero these, but being explicit here costs nothing). */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: vt-fade-out 0.16s ease;
+  }
+  ::view-transition-new(root) {
+    animation: vt-fade-in 0.22s ease;
+  }
+}
+
+@keyframes vt-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes vt-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes blob1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, 20px) scale(1.1); }
+  66% { transform: translate(-20px, 40px) scale(0.9); }
+}
+
+@keyframes blob2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-40px, -30px) scale(1.15); }
+  66% { transform: translate(30px, -20px) scale(0.95); }
+}
+
+@keyframes blob3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -40px) scale(1.2); }
+  66% { transform: translate(-30px, 10px) scale(0.85); }
+}
+
+/* Ambient hero blobs — accent-tinted radial glows drifting on the pure-
+   transform blob1/2/3 keyframes (15–26s loops, imperceptible as "motion"
+   but noticeable as "alive"). Opacity is baked into the gradients
+   (≈10–15% effective) so the text above stays perfectly legible.
+   Reduced-motion: the global duration collapse below freezes them as a
+   static tint instead of animating. */
+.blob-anim {
+  pointer-events: none;
+}
+
+.blob-1 {
+  background: radial-gradient(circle at center, rgba(214, 156, 174, 0.28), transparent 70%);
+  animation: blob1 18s ease-in-out infinite;
+}
+
+.blob-2 {
+  background: radial-gradient(circle at center, rgba(214, 156, 174, 0.2), transparent 70%);
+  animation: blob2 22s ease-in-out infinite;
+}
+
+.blob-3 {
+  background: radial-gradient(circle at center, rgba(232, 183, 196, 0.16), transparent 70%);
+  animation: blob3 26s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
