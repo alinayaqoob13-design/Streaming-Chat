@@ -36,7 +36,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp, Download, Printer, Check, Undo2 } from "lucide-react";
+import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, ChevronUp, Download, Printer, Check, Undo2, FileText } from "lucide-react";
 import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
@@ -45,7 +45,7 @@ import { InputTopBar } from "@/components/input-top-bar";
 import { useRouter, usePathname } from "next/navigation";
 
 import { generateId, cn } from "@/lib/utils";
-import { studySetToMarkdown, downloadMarkdown } from "@/lib/export-notes";
+import { studySetToMarkdown, downloadMarkdown, studySetToWordHtml, downloadWord } from "@/lib/export-notes";
 import { withViewTransition } from "@/lib/view-transition";
 import { getLocalDateKey, loadStreak, saveStreak, recordStudyDay, EMPTY_STREAK, type StreakState } from "@/lib/streak";
 import { pruneOrphanQuizProgress } from "@/lib/quiz-progress";
@@ -107,6 +107,11 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
   // Kept so a failed generation can restore the student's text into the input
   const [lastNotes, setLastNotes] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  // Incremented on "New Study Set" — remounts NotesInput so a stale draft
+  // never survives into a fresh session (see handleNewNotes).
+  const [inputEpoch, setInputEpoch] = useState(0);
+  // Export menu (Word/PDF/Markdown) on the result screen
+  const [exportOpen, setExportOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   // Helper to open a set, optionally updating the URL
@@ -143,6 +148,16 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
   useEffect(() => {
     setHasMounted(true);
   }, []);
+
+  // Escape closes the export menu
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExportOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [exportOpen]);
 
   // Prune quiz progress (lib/quiz-progress.ts) belonging to sets that no
   // longer exist. Runs after hydration and whenever the saved-set list
@@ -259,6 +274,11 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
     setError(null);
     setShowSuccess(false);
     if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    // Bumping the epoch REMOUNTS NotesInput (via key) — its internal draft,
+    // compose flag and option chips all reset. Without this, clicking
+    // "New Study Set" while already on the input screen left the previous
+    // notes sitting in the textarea (a prop change never resets useState).
+    setInputEpoch((e) => e + 1);
     withViewTransition(() => {
       setStatus("input");
       setActiveSetId(null);
@@ -474,20 +494,81 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
               {activeSetId && savedSets.find((s) => s.id === activeSetId) && (
                 <ShareButton studySet={savedSets.find((s) => s.id === activeSetId)!} />
               )}
-              {/* Export — markdown download + print-to-PDF, both free/local */}
-              <button
-                onClick={() =>
-                  downloadMarkdown(
-                    `${deriveTitle(lastNotes).replace(/[^\w\- ]/g, "").trim() || "study-notes"}.md`,
-                    studySetToMarkdown(result, deriveTitle(lastNotes), Date.now())
-                  )
-                }
-                aria-label="Download study set as Markdown"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-elevated px-3 py-2 text-sm text-text-primary transition-colors hover:bg-border focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                <Download size={14} />
-                <span className="hidden sm:inline">Export</span>
-              </button>
+              {/* Export — menu with Word (.doc), PDF (print dialog) and
+                  Markdown. The .md-only download opened in VS Code for most
+                  students; Word/PDF are the formats they actually hand in. */}
+              <div className="relative">
+                <button
+                  onClick={() => setExportOpen((o) => !o)}
+                  aria-expanded={exportOpen}
+                  aria-haspopup="menu"
+                  aria-label="Export study set"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-surface-elevated px-3 py-2 text-sm text-text-primary transition-colors hover:bg-border focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <Download size={14} />
+                  <span className="hidden sm:inline">Export</span>
+                  <ChevronDown size={12} className={exportOpen ? "rotate-180 transition-transform" : "transition-transform"} />
+                </button>
+                {exportOpen && (
+                  <>
+                    {/* Click-away backdrop — inert, closes the menu */}
+                    <button
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      onClick={() => setExportOpen(false)}
+                      className="fixed inset-0 z-40 cursor-default"
+                    />
+                    <div
+                      role="menu"
+                      aria-label="Export options"
+                      className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-border bg-surface p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)]"
+                    >
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setExportOpen(false);
+                          const title = deriveTitle(lastNotes);
+                          downloadWord(
+                            `${title.replace(/[^\w\- ]/g, "").trim() || "study-notes"}.doc`,
+                            studySetToWordHtml(result, title, Date.now())
+                          );
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-elevated focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        <FileText size={14} className="shrink-0 text-accent" />
+                        Word document (.doc)
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setExportOpen(false);
+                          // The print stylesheet renders the whole set as a
+                          // clean handout — "Save as PDF" in the dialog
+                          window.print();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-elevated focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        <Printer size={14} className="shrink-0 text-accent" />
+                        PDF (via print dialog)
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setExportOpen(false);
+                          downloadMarkdown(
+                            `${deriveTitle(lastNotes).replace(/[^\w\- ]/g, "").trim() || "study-notes"}.md`,
+                            studySetToMarkdown(result, deriveTitle(lastNotes), Date.now())
+                          );
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-elevated focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        <Download size={14} className="shrink-0 text-accent" />
+                        Markdown (.md)
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={() => window.print()}
                 aria-label="Print or save as PDF"
@@ -586,6 +667,7 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
           <div className="flex flex-col rounded-xl border border-border bg-surface p-4 sm:p-6">
             <NotesInput
+              key={inputEpoch}
               onGenerate={handleGenerate}
               isGenerating={status === "generating"}
               initialNotes={lastNotes}

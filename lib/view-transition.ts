@@ -21,13 +21,20 @@
  * that repaint the screen — React 18 batches them, so the transition
  * snapshot captures the switch as one continuous frame.
  *
- * If the transition itself fails (the API can reject when the snapshot
- * commit throws), `fn` still runs as a plain update — the UI must never be
- * left on the old screen with new state half-applied.
+ * The returned ViewTransition's .ready/.finished/.updateCallbackDone
+ * promises REJECT with "Transition was aborted because of invalid state"
+ * whenever a transition is skipped (rapid back-to-back calls, hidden tab).
+ * Unhandled, those rejections surface as runtime errors (Next.js dev
+ * overlay). We attach no-op catchers — an aborted transition only loses its
+ * animation; the state from `fn` is already applied.
  */
 export function withViewTransition(fn: () => void): void {
   const doc = document as Document & {
-    startViewTransition?: (callback: () => void) => void | Promise<void>;
+    startViewTransition?: (callback: () => void) => {
+      updateCallbackDone?: Promise<unknown>;
+      ready?: Promise<unknown>;
+      finished?: Promise<unknown>;
+    };
   };
   if (
     !doc.startViewTransition ||
@@ -37,8 +44,10 @@ export function withViewTransition(fn: () => void): void {
     return;
   }
   try {
-    // Promise.resolve() keeps older implementations that return nothing safe.
-    void Promise.resolve(doc.startViewTransition(fn)).catch(() => fn());
+    const vt = doc.startViewTransition(fn);
+    vt.updateCallbackDone?.catch(() => {});
+    vt.ready?.catch(() => {});
+    vt.finished?.catch(() => {});
   } catch {
     // Synchronous throw from an old polyfill — fall back to a plain update.
     fn();

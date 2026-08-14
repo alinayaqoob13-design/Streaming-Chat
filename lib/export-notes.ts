@@ -116,6 +116,102 @@ export function downloadJson(filename: string, data: unknown): void {
   );
 }
 
+// ---------------------------------------------------------------------------
+// WORD EXPORT (.doc)
+// ---------------------------------------------------------------------------
+// Word opens HTML documents served as application/msword just fine — a real
+// .doc download with zero dependencies. The UTF-8 BOM keeps Urdu text intact.
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Minimal markdown → HTML for the summary (headings, bold/italic, bullets, code). */
+function summaryMarkdownToHtml(md: string): string {
+  const inline = (s: string) =>
+    escapeHtml(s)
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/_([^_]+)_/g, "<em>$1</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  const out: string[] = [];
+  let inList = false;
+  for (const raw of md.split("\n")) {
+    const line = raw.trim();
+    const bullet = /^[-*+]\s+/.test(line);
+    if (!bullet && inList) {
+      out.push("</ul>");
+      inList = false;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.*)$/);
+    if (heading) {
+      out.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`);
+    } else if (bullet) {
+      if (!inList) {
+        out.push("<ul>");
+        inList = true;
+      }
+      out.push(`<li>${inline(line.replace(/^[-*+]\s+/, ""))}</li>`);
+    } else if (line !== "") {
+      out.push(`<p>${inline(line)}</p>`);
+    }
+  }
+  if (inList) out.push("</ul>");
+  return out.join("\n");
+}
+
+/** Serialize a study set to a Word-compatible HTML document. */
+export function studySetToWordHtml(
+  set: StudyNotes,
+  title = "Study Notes",
+  createdAt?: number
+): string {
+  const parts: string[] = [`<h1>${escapeHtml(title)}</h1>`];
+
+  if (createdAt) {
+    parts.push(
+      `<p><em>Generated ${new Date(createdAt).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })} — AI Study Notes Buddy</em></p>`
+    );
+  }
+
+  parts.push("<h2>Summary</h2>", summaryMarkdownToHtml(set.summary.trim()));
+
+  parts.push("<h2>Flashcards</h2>", "<ol>");
+  set.flashcards.forEach((card) => {
+    parts.push(`<li><strong>${escapeHtml(card.front)}</strong> — ${escapeHtml(card.back)}</li>`);
+  });
+  parts.push("</ol>");
+
+  parts.push("<h2>Quiz</h2>", "<ol>");
+  set.quiz.forEach((q) => {
+    parts.push(`<li><p>${escapeHtml(q.question)}</p><ul>`);
+    q.options.forEach((opt, oi) => {
+      parts.push(
+        `<li>${String.fromCharCode(65 + oi)}. ${escapeHtml(opt)}${oi === q.correctIndex ? " ✓" : ""}</li>`
+      );
+    });
+    parts.push(
+      `</ul><p><em>Answer: ${String.fromCharCode(65 + q.correctIndex)} — ${escapeHtml(q.explanation)}</em></p></li>`
+    );
+  });
+  parts.push("</ol>");
+
+  return `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${escapeHtml(
+    title
+  )}</title></head><body>${parts.join("\n")}</body></html>`;
+}
+
+/** Trigger a browser download of a Word (.doc) file. */
+export function downloadWord(filename: string, html: string): void {
+  downloadFile(filename, new Blob(["\ufeff" + html], { type: "application/msword;charset=utf-8" }));
+}
+
 /** Shared download helper — link click on a blob URL, then revoke. */
 function downloadFile(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);

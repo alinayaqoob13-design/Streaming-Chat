@@ -105,4 +105,35 @@ describe("NotesBuddy", () => {
     expect(screen.getAllByText("Memory management is the job of the OS.")[0]).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem("capstone-study-sets") ?? "[]")).toHaveLength(1);
   });
+
+  it("New Study Set on the input screen clears the current draft back to the hero", async () => {
+    render(<NotesBuddy />);
+    const textarea = screen.getByLabelText(/lecture notes/i) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "A half-written draft that must not survive." } });
+    expect(textarea.value).not.toBe("");
+
+    // The sidebar's New Study Set button (desktop rail is always in the DOM)
+    fireEvent.click(screen.getAllByRole("button", { name: /new study set/i })[0]);
+
+    await waitFor(() =>
+      expect((screen.getByLabelText(/lecture notes/i) as HTMLTextAreaElement).value).toBe("")
+    );
+    // The hero welcome returns for a fresh start
+    await waitFor(() =>
+      expect(screen.getByText(/Turn lecture notes into/i)).toBeInTheDocument()
+    );
+  });
+
+  it("opens the export menu with Word and PDF options on the result screen", async () => {
+    await generateStudySet("Memory management is the job of the OS.");
+
+    fireEvent.click(screen.getByRole("button", { name: /export study set/i }));
+    expect(screen.getByRole("menuitem", { name: /word document/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /markdown/i })).toBeInTheDocument();
+
+    // Escape closes the menu
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menuitem", { name: /word document/i })).not.toBeInTheDocument();
+  });
 });

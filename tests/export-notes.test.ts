@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { studySetToMarkdown, downloadMarkdown, summaryToText, downloadText } from "@/lib/export-notes";
+import { studySetToMarkdown, downloadMarkdown, summaryToText, downloadText, studySetToWordHtml } from "@/lib/export-notes";
 import type { StudyNotes } from "@/types/notes";
 
 const sampleSet: StudyNotes = {
@@ -100,6 +100,40 @@ describe("downloadMarkdown()", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+  });
+});
+
+describe("studySetToWordHtml()", () => {
+  it("wraps the set in a Word-compatible HTML document", () => {
+    const html = studySetToWordHtml(sampleSet, "OS Lecture 7");
+    expect(html).toContain('xmlns:w="urn:schemas-microsoft-com:office:word"');
+    expect(html).toContain("<h1>OS Lecture 7</h1>");
+  });
+
+  it("converts the summary's markdown to HTML (headings, bullets)", () => {
+    const html = studySetToWordHtml(sampleSet);
+    expect(html).toContain("<h3>Processes</h3>");
+    expect(html).toContain("<li>A program in execution.</li>");
+    expect(html).not.toContain("###");
+  });
+
+  it("includes flashcards, quiz options and answer markers", () => {
+    const html = studySetToWordHtml(sampleSet);
+    expect(html).toContain("<strong>What is a process?</strong>");
+    expect(html).toContain("B. Stroma ✓");
+    expect(html).toContain("Answer: B — The notes place it in the stroma.");
+  });
+
+  it("escapes HTML in user/model text so the doc can never break", () => {
+    const evil: StudyNotes = {
+      summary: "A <b>bold</b> claim & more",
+      flashcards: [{ front: "1 < 2", back: "a & b" }],
+      quiz: [],
+    };
+    const html = studySetToWordHtml(evil);
+    expect(html).toContain("&lt;b&gt;bold&lt;/b&gt;");
+    expect(html).toContain("a &amp; b");
+    expect(html).not.toContain("<b>bold</b>");
   });
 });
 
