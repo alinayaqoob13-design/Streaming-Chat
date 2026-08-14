@@ -82,7 +82,7 @@ export function StatsView({ sets, onStartMixedPractice }: StatsViewProps) {
         {stats.map(({ icon: Icon, label, value, accent }) => (
           <div
             key={label}
-            className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface-elevated px-3 py-2.5"
+            className="lift flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface-elevated px-3 py-2.5"
           >
             <dt className="inline-flex items-center gap-1.5 text-[11px] text-text-muted">
               <Icon

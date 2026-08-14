@@ -382,7 +382,7 @@ function OptionChips<T extends string | number>({
             onClick={() => onChange(c.value)}
             disabled={disabled}
             className={cn(
-              "inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-all duration-200",
+              "press inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-all duration-200",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
               "disabled:cursor-not-allowed disabled:opacity-50",
               value === c.value
@@ -604,7 +604,7 @@ export function NotesInput({
                     }
                     aria-pressed={isActive}
                     className={cn(
-                      "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                      "press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       isActive
                         ? "border-2 border-accent bg-accent font-semibold text-on-accent shadow-[0_0_12px_var(--color-accent-glow)]"
@@ -727,6 +727,13 @@ export function NotesInput({
           Add a little more — at least {MIN_CHARS} characters make useful study material.
         </p>
       )}
+      {/* Compose mode with an empty textarea (e.g. cleared after going back):
+          without this the Generate button just sits there dead with no reason */}
+      {hasComposed && charCount === 0 && !isGenerating && (
+        <p className="text-xs text-text-muted">
+          Paste or type your notes above — at least {MIN_CHARS} characters unlock Generate.
+        </p>
+      )}
       {isOverLimit && (
         <p className="text-xs text-danger">
           These notes are too long for one go — split them into smaller sections.
@@ -813,13 +820,16 @@ export function NotesInput({
                 onClick={handleGenerate}
                 disabled={buttonState !== "ready"}
                 whileTap={buttonState === "ready" ? { scale: 0.98 } : {}}
-                whileHover={buttonState === "ready" ? { scale: 1.03 } : {}}
+                whileHover={buttonState === "ready" ? { scale: 1.01 } : {}}
                 className={cn(
                   "flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-medium transition-all duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
                   "disabled:cursor-not-allowed",
-                  buttonState === "idle" && "bg-surface-elevated text-text-muted",
-                  buttonState === "ready" && "bg-accent text-on-accent hover:bg-accent-hover hover:shadow-[0_0_12px_var(--color-accent-glow)]"
+                  // Idle: bordered + slightly brighter text so the button reads
+                  // as "disabled but alive", not dead. Ready: persistent soft
+                  // glow so the primary action visibly switches on.
+                  buttonState === "idle" && "border border-border bg-surface-elevated text-text-secondary opacity-80",
+                  buttonState === "ready" && "bg-accent text-on-accent shadow-[0_0_18px_var(--color-accent-glow)] hover:bg-accent-hover hover:shadow-[0_0_24px_var(--color-accent-glow)]"
                 )}
                 aria-label="Generate study material"
               >

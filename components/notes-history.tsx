@@ -79,7 +79,7 @@ function parseImportedSet(raw: string): SavedStudySet | null {
       .map((q) => ({
         question: q.question,
         options: q.options.slice(0, 4),
-        correctIndex: Math.min(q.correctIndex, q.options.length - 1),
+        correctIndex: Math.max(0, Math.min(q.correctIndex, q.options.length - 1)),
         explanation: typeof q.explanation === "string" ? q.explanation : "No explanation included in backup.",
       }));
     // Backups always carry a quiz, but tolerate older files that predate it.
@@ -189,7 +189,7 @@ export function NotesHistory({ sets, onOpen, onDelete, onImport }: NotesHistoryP
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="group flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-elevated px-3 py-2.5 transition-colors hover:border-accent/30">
+              <div className="lift group flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-elevated px-3 py-2.5 hover:border-accent/30">
                 {/* Row body is the real button — the whole row opens the set */}
                 <button
                   onClick={() => onOpen(set)}

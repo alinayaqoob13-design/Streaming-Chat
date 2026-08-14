@@ -188,6 +188,16 @@ describe("NotesInput", () => {
     expect(screen.queryByRole("button", { name: /back to home/i })).not.toBeInTheDocument();
   });
 
+  it("explains how to unlock Generate when compose mode is empty", () => {
+    render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
+    typeNotes(LONG_ENOUGH);
+    // Clearing the text keeps compose mode (no hero flicker) — and now the
+    // student sees WHY the Generate button is disabled instead of a dead button
+    typeNotes("");
+    expect(screen.getByText(/characters unlock Generate/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /generate study material/i })).toBeDisabled();
+  });
+
   it("highlights the matching preview card when an artifact button is clicked (Phase 9)", () => {
     render(<NotesInput onGenerate={vi.fn()} isGenerating={false} />);
 
