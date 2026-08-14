@@ -40,16 +40,15 @@ import { AlertCircle, RotateCcw, PenLine, MessageSquareText, ChevronDown, Chevro
 import { NotesInput } from "@/components/notes-input";
 import { NotesResult } from "@/components/notes-result";
 import { NotesChat } from "@/components/notes-chat";
-import { NotesHistory } from "@/components/notes-history";
 import { ShareButton } from "@/components/share-button";
+import { InputTopBar } from "@/components/input-top-bar";
 import { useRouter, usePathname } from "next/navigation";
 
-import { generateId } from "@/lib/utils";
+import { generateId, cn } from "@/lib/utils";
 import { studySetToMarkdown, downloadMarkdown } from "@/lib/export-notes";
 import { withViewTransition } from "@/lib/view-transition";
 import { getLocalDateKey, loadStreak, saveStreak, recordStudyDay, EMPTY_STREAK, type StreakState } from "@/lib/streak";
-import { StreakDisplay } from "@/components/streak-display";
-import { StatsView } from "@/components/stats-view";
+import { pruneOrphanQuizProgress } from "@/lib/quiz-progress";
 import { DEFAULT_GENERATION_OPTIONS, type StudyNotes, type SavedStudySet, type GenerationOptions, type OutputLanguage, type Flashcard, type QuizQuestion } from "@/types/notes";
 import { AppShell } from "@/components/app-shell/app-shell";
 type BuddyStatus = "input" | "generating" | "result" | "error";
@@ -126,6 +125,10 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
   const [undoToast, setUndoToast] = useState<{ setId: string; title: string } | null>(null);
   const undoStashRef = useRef<SavedStudySet | null>(null);
   const undoTimerRef = useRef<number | null>(null);
+  // Deep-link set opener must fire exactly once. Without this guard the
+  // effect below re-fires when activeSetId flips to null ("New notes") and
+  // would re-open the set the student just left.
+  const initialSetOpenedRef = useRef(false);
 
   // Clear the undo window on unmount so no timer fires into a dead component
   useEffect(() => {
@@ -141,16 +144,27 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
     setHasMounted(true);
   }, []);
 
-  // Open set from URL on initial mount (no navigation push)
+  // Prune quiz progress (lib/quiz-progress.ts) belonging to sets that no
+  // longer exist. Runs after hydration and whenever the saved-set list
+  // changes; it is cheap and idempotent, so per-event sync is fine.
   useEffect(() => {
     if (!hasMounted) return;
-    if (initialSetId && !activeSetId) {
-      const set = savedSets.find((s) => s.id === initialSetId);
-      if (set) {
-        openSet(set, false);
-      }
-    }
-  }, [hasMounted, initialSetId, activeSetId, savedSets]);
+    pruneOrphanQuizProgress(new Set(savedSets.map((s) => s.id)));
+  }, [hasMounted, savedSets]);
+
+  // Open set from URL on initial mount (no navigation push). Runs once via
+  // initialSetOpenedRef — the effect also fires on savedSets/activeSetId
+  // changes (they are listed as deps), but past the first successful open a
+  // later "null" transition must never re-trigger a deep link.
+  useEffect(() => {
+    if (!hasMounted) return;
+    if (initialSetOpenedRef.current) return;
+    if (!initialSetId) return;
+    const set = savedSets.find((s) => s.id === initialSetId);
+    if (!set) return;
+    initialSetOpenedRef.current = true;
+    openSet(set, false);
+  }, [hasMounted, initialSetId, savedSets]);
 
   const handleGenerate = useCallback(async (notes: string, options: GenerationOptions) => {
     // Reset any prior success indicator when starting a new generation
@@ -373,15 +387,31 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
         activeSetId={activeSetId}
         onOpenSet={handleOpenSet}
         onNewSet={handleNewNotes}
+        // Sidebar history renders from localStorage — server + first client
+        // paint must agree (empty placeholder); real rows follow hydration
+        isHydrated={hasMounted}
       >
       {status === "input" && (
-        <div className="mb-2 shrink-0 px-2">
-          <h2 className="font-display text-2xl font-semibold text-text-primary hidden lg:block">
-            Study Workspace
-          </h2>
-          <p className="text-sm text-text-secondary mt-1">
-            Paste lecture notes — get a summary, flashcards &amp; a quiz
-          </p>
+        <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-3 px-2">
+          <div>
+            <h2 className="font-display text-2xl font-semibold text-text-primary hidden lg:block">
+              Study Workspace
+            </h2>
+            <p className="text-sm text-text-secondary mt-1">
+              Paste lecture notes — get a summary, flashcards &amp; a quiz
+            </p>
+          </div>
+          {/* Compact controls — streak chip + stats and recent-sets popovers
+              (see components/input-top-bar.tsx). Replaces the old right-side
+              rail so the workspace owns the full column width. */}
+          <InputTopBar
+            streak={hasMounted ? streak : null}
+            sets={hasMounted ? savedSets : []}
+            onOpenSet={handleOpenSet}
+            onDeleteSet={handleDeleteSet}
+            onImportSet={handleImportSet}
+            onStartMixedPractice={() => router.push("/mixed-practice")}
+          />
         </div>
       )}
 
@@ -475,11 +505,15 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
               </button>
             </div>
           </div>
-          <NotesResult result={result} language={resultLanguage} title={deriveTitle(lastNotes)} sourceNotes={lastNotes} onRateCard={handleRateCard} onMissQuestion={handleMissQuestion} />
+          <NotesResult result={result} language={resultLanguage} title={deriveTitle(lastNotes)} sourceNotes={lastNotes} setId={activeSetId ?? undefined} onRateCard={handleRateCard} onMissQuestion={handleMissQuestion} />
 
           {/* Follow-up chat — collapsible so it doesn't crowd the tabs.
               key={lastNotes} forces a remount per study set: a conversation
-              never bleeds into different notes. */}
+              never bleeds into different notes.
+              IMPORTANT: the panel stays MOUNTED while collapsed (CSS hidden,
+              not conditionally rendered) — otherwise useChat's state would be
+              destroyed on every toggle, killing an in-flight stream and the
+              whole conversation. */}
           <div className="shrink-0 rounded-xl border border-border bg-surface-elevated">
             <button
               onClick={() => setChatOpen((open) => !open)}
@@ -496,11 +530,9 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
                 <ChevronDown size={16} className="text-text-muted" />
               )}
             </button>
-            {chatOpen && (
-              <div className="flex h-[380px] flex-col border-t border-border">
-                <NotesChat key={lastNotes} notes={lastNotes} />
-              </div>
-            )}
+            <div className={cn("flex h-[380px] flex-col border-t border-border", !chatOpen && "hidden")}>
+              <NotesChat key={lastNotes} notes={lastNotes} />
+            </div>
           </div>
 
           {/* Print-only handout layout — visible solely in @media print (see
@@ -545,50 +577,19 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
         </div>
       ) : (
         /* -----------------------------------------------------------------
-           BENTO GRID (input screen)
-           One dominant primary tile + a supporting rail on xl (1280px+);
-           single column below that, input first, streak, then history.
-           Structure only — every child keeps its existing internals.
+           INPUT SCREEN
+           A single full-width workspace tile (textarea + options + Generate)
+           with the compact controls in the top bar above. flex + min-h-0
+           keep NotesInput's stretched-layout architecture intact: the tile
+           absorbs the available height and the textarea grows into it.
            ----------------------------------------------------------------- */
-        <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4 overflow-y-auto xl:grid-cols-12 xl:gap-6">
-          {/* PRIMARY TILE — the visual anchor: textarea + options + Generate.
-              items-stretch above makes the tile the full row height, so the
-              input workspace (and its textarea, see NotesInput) absorbs the
-              available vertical space instead of sitting at a fixed size. */}
-          <div className="flex flex-col rounded-xl border border-border bg-surface p-4 sm:p-6 xl:col-span-7">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+          <div className="flex flex-col rounded-xl border border-border bg-surface p-4 sm:p-6">
             <NotesInput
               onGenerate={handleGenerate}
               isGenerating={status === "generating"}
               initialNotes={lastNotes}
             />
-          </div>
-
-          {/* SUPPORTING RAIL — streak, stats, then recent study sets. Kept at
-              its natural height — the rail only ever holds its own content,
-              never stretches to match the primary tile. */}
-          <div className="flex flex-col gap-4 self-start xl:col-span-5 xl:gap-6">
-            {hasMounted && streak && (
-              <div className="rounded-xl border border-border bg-surface p-4">
-                <StreakDisplay streak={streak} />
-              </div>
-            )}
-            {hasMounted && (
-              <div className="rounded-xl border border-border bg-surface p-4">
-                <StatsView sets={savedSets} onStartMixedPractice={() => router.push("/mixed-practice")} />
-              </div>
-            )}
-            {/* Tile hides while there is nothing to list (NotesHistory itself
-                returns null on empty — the tile follows suit) */}
-            {hasMounted && savedSets.length > 0 && (
-              <div className="rounded-xl border border-border bg-surface p-4">
-                <NotesHistory
-                  sets={savedSets}
-                  onOpen={handleOpenSet}
-                  onDelete={handleDeleteSet}
-                  onImport={handleImportSet}
-                />
-              </div>
-            )}
           </div>
         </div>
       )}

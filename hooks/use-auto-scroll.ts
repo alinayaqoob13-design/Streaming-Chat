@@ -52,6 +52,13 @@ export function useAutoScroll({
   const [showJumpButton, setShowJumpButton] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
 
+  // isStreaming is a boolean that stays true for the WHOLE stream, so an
+  // effect keyed on it can never track per-token growth. The streaming flag
+  // is mirrored into a ref so the MutationObserver below always sees the
+  // current value without re-subscribing per render.
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+
   // Track if we should auto-scroll on the next content update
   const shouldAutoScrollRef = useRef(true);
   // Track previous scroll position to detect intentional scrolls
@@ -136,9 +143,10 @@ export function useAutoScroll({
   }, [containerRef, handleScroll]);
 
   /**
-   * Effect: Auto-scroll when new content arrives.
-   * This runs whenever the caller signals content changed (via isStreaming
-   * or by calling scrollToBottom).
+   * Effect: Auto-scroll when the streaming STARTS (status flips to
+   * submitted/streaming) or when the user explicitly scrolls to bottom.
+   * Token-by-token follow-up is handled by the MutationObserver below —
+   * that effect only fires on state changes, not per token.
    */
   useEffect(() => {
     const container = containerRef.current;
@@ -161,6 +169,37 @@ export function useAutoScroll({
       }
     }
   }, [containerRef, isStreaming]); // Re-run when streaming state changes
+
+  /**
+   * Effect: follow every content mutation inside the container while
+   * streaming. Streaming appends/rewrites text nodes token-by-token, so a
+   * childList + characterData observer fires on every token — this restores
+   * the "follows the stream" behavior that a [isStreaming]-keyed effect
+   * alone can never provide (isStreaming is constant for the whole stream).
+   */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onContentChange = () => {
+      if (!isStreamingRef.current) return;
+      if (shouldAutoScrollRef.current) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: "auto",
+        });
+      } else if (!pendingContentRef.current) {
+        // New content arrived while user is scrolled up
+        pendingContentRef.current = true;
+        setShowJumpButton(true);
+        setNewMessageCount((prev) => prev + 1);
+      }
+    };
+
+    const observer = new MutationObserver(onContentChange);
+    observer.observe(container, { childList: true, characterData: true, subtree: true });
+    return () => observer.disconnect();
+  }, [containerRef]);
 
   const resetNewMessageCount = useCallback(() => {
     setNewMessageCount(0);

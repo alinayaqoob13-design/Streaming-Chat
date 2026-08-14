@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Noto_Nastaliq_Urdu } from "next/font/google";
 import "./globals.css";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 
 // Display face for headings/title/tab labels — loaded once, exposed as a
 // CSS variable consumed by --font-display in globals.css (@theme).
@@ -34,6 +35,7 @@ export default function RootLayout({
         className={`min-h-screen bg-background ${playfair.variable} ${notoNastaliq.variable}`}
       >
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

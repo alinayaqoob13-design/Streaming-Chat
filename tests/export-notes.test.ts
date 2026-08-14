@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { studySetToMarkdown, downloadMarkdown } from "@/lib/export-notes";
+import { studySetToMarkdown, downloadMarkdown, summaryToText, downloadText } from "@/lib/export-notes";
 import type { StudyNotes } from "@/types/notes";
 
 const sampleSet: StudyNotes = {
@@ -100,5 +100,56 @@ describe("downloadMarkdown()", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+  });
+});
+
+describe("summaryToText()", () => {
+  it("leads with the title and a plain SUMMARY header", () => {
+    const txt = summaryToText(sampleSet, "OS Lecture 7");
+    expect(txt.startsWith("OS Lecture 7")).toBe(true);
+    expect(txt).toContain("SUMMARY");
+  });
+
+  it("strips markdown syntax so the file reads as plain text", () => {
+    const txt = summaryToText(sampleSet);
+    expect(txt).toContain("Processes"); // ### Processes heading text survives
+    expect(txt).not.toContain("###");
+    expect(txt).not.toContain("* A program in execution."); // bullet glyph gone
+    expect(txt).toContain("• A program in execution.");
+  });
+
+  it("keeps the summary body verbatim once stripped", () => {
+    const txt = summaryToText(sampleSet);
+    expect(txt).toContain("A program in execution.");
+  });
+});
+
+describe("downloadText()", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("downloads a text/plain blob named .txt", () => {
+    const createObjectURL = vi.fn().mockReturnValue("blob:txt");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(window, "URL", {
+      value: { createObjectURL, revokeObjectURL },
+      configurable: true,
+    });
+    const click = vi.fn();
+    const originalCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = originalCreate(tag);
+      if (tag === "a") el.click = click;
+      return el;
+    });
+
+    downloadText("summary.txt", "hello summary");
+
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe("text/plain;charset=utf-8");
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:txt");
   });
 });

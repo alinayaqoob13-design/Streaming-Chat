@@ -18,6 +18,11 @@ import { google } from "@ai-sdk/google";
 import { NextRequest } from "next/server";
 import { SYSTEM_PROMPT, DEFAULT_MODEL, GENERATION_CONFIG, ERROR_MESSAGES } from "@/lib/config";
 
+// Cost/latency guardrails: the conversation the model sees is capped to the
+// last MAX_MESSAGES turns, each at most MAX_CONTENT_CHARS characters.
+const MAX_MESSAGES = 40;
+const MAX_CONTENT_CHARS = 16_000;
+
 /**
  * POST /api/chat
  * Accepts a conversation history and returns a streaming text response.
@@ -27,8 +32,8 @@ export async function POST(req: NextRequest) {
     // -----------------------------------------------------------------------
     // 1. Parse and validate request body
     // -----------------------------------------------------------------------
-    const body = await req.json();
-    const { messages } = body;
+    const body = await req.json().catch(() => null);
+    const messages = body && typeof body === "object" ? (body as { messages?: unknown }).messages : undefined;
 
     if (!Array.isArray(messages)) {
       return new Response(
@@ -37,14 +42,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate message shape (defense-in-depth)
-    const validMessages = messages.filter(
-      (m): m is { role: "user" | "assistant" | "system"; content: string } =>
-        typeof m === "object" &&
-        m !== null &&
-        ["user", "assistant", "system"].includes(m.role) &&
-        typeof m.content === "string"
-    );
+    // Validate message shape (defense-in-depth). Only user/assistant roles
+    // are accepted — a client-supplied "system" message would compete with
+    // the server's own SYSTEM_PROMPT (a prompt-injection surface).
+    const validMessages = messages
+      .filter(
+        (m): m is { role: "user" | "assistant"; content: string } => {
+          if (typeof m !== "object" || m === null) return false;
+          const role = (m as { role?: unknown }).role;
+          return (
+            (role === "user" || role === "assistant") &&
+            typeof (m as { content?: unknown }).content === "string"
+          );
+        }
+      )
+      // Keep the prompt within sane bounds: the last 40 messages, each at
+      // most 16k chars. Anything beyond is dropped rather than billed.
+      .slice(-MAX_MESSAGES)
+      .filter((m) => m.content.length <= MAX_CONTENT_CHARS);
 
     if (validMessages.length === 0) {
       return new Response(

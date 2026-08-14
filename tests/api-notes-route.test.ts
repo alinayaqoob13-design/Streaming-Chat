@@ -137,4 +137,28 @@ describe("POST /api/notes", () => {
     await POST(mockReq({ notes: VALID_NOTES, options: { language: "fr" } }));
     expect(generateObject.mock.calls[0][0].system).not.toContain("Urdu");
   });
+
+  it("maps a 429 statusCode to the rate-limit message", async () => {
+    generateObject.mockRejectedValueOnce(
+      Object.assign(new Error("rate limit exceeded"), { statusCode: 429 })
+    );
+    const res = await POST(mockReq({ notes: VALID_NOTES }));
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toMatch(/too many messages/i);
+  });
+
+  it("maps a 400 context-length error to the context message", async () => {
+    generateObject.mockRejectedValueOnce(
+      Object.assign(new Error("context length exceeded"), { statusCode: 400 })
+    );
+    const res = await POST(mockReq({ notes: VALID_NOTES }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/quite long/i);
+  });
+
+  it("keeps the text-based 429 fallback for non-SDK errors", async () => {
+    generateObject.mockRejectedValueOnce(new Error("429 Too Many Requests"));
+    const res = await POST(mockReq({ notes: VALID_NOTES }));
+    expect(res.status).toBe(429);
+  });
 });

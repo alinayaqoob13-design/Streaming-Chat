@@ -153,15 +153,27 @@ export const NOTES_FOLLOWUP_SYSTEM_PROMPT = `You are a study assistant helping a
 ## The student's notes
 `;
 
-// ---------------------------------------------------------------------------
-// STREAMING CONFIG
-// ---------------------------------------------------------------------------
-// Controls how the stream behaves on the wire.
-export const STREAM_CONFIG = {
-  // Send chunks as soon as they are generated (low latency)
-  // vs. buffer for smoother rendering (higher latency)
-  // For this capstone, we prioritize low latency.
-  flushIntervalMs: 0,
+// Per-card "Explain differently" (POST /api/notes/explain). The route embeds
+// the source notes beneath this header server-side; the client only sends the
+// flashcard it could not recall. Answers must be a fresh retelling, not a
+// copy of the card's back text.
+export const EXPLAIN_CARD_SYSTEM_PROMPT = `You are a study tutor helping a university student who could not recall a flashcard during revision.
+
+## Rules
+- Explain the flashcard's answer DIFFERENTLY than the answer text itself: new wording, a concrete example, an analogy, or a short step-by-step walkthrough.
+- Ground everything in the student's notes below — never import outside knowledge.
+- If the notes do not cover this card, say so in one sentence and give only the minimal definition needed to move on.
+- Keep the explanation under 200 words, written in the same language as the flashcard.
+
+## The student's notes
+`;
+
+// "Explain differently" is a snappy single-answer call: short token budget,
+// slightly warmer temperature than structured generation so the retelling
+// reads naturally without drifting into invention.
+export const EXPLAIN_CARD_CONFIG = {
+  maxTokens: 512,
+  temperature: 0.7,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -177,3 +189,44 @@ export const ERROR_MESSAGES = {
   notesTooLong: "These notes are too long for one go. Try splitting them into smaller sections.",
   notesInvalid: "Could not read your notes. Please paste plain text and try again.",
 } as const;
+
+// ---------------------------------------------------------------------------
+// MODEL ERROR CLASSIFICATION
+// ---------------------------------------------------------------------------
+// The AI SDK throws APICallError subclasses carrying a statusCode; a plain
+// message match ("429" / "rate limit") is brittle across providers. This
+// helper reads the structured statusCode first and falls back to the old
+// text matching so every failure reaches the UI as friendly, accurate copy.
+
+type ModelErrorInfo = { status: number; message: string };
+
+function readStatusCode(error: unknown): number | null {
+  if (typeof error === "object" && error !== null && "statusCode" in error) {
+    const status = (error as { statusCode?: unknown }).statusCode;
+    return typeof status === "number" && Number.isFinite(status) ? status : null;
+  }
+  return null;
+}
+
+export function classifyModelError(error: unknown): ModelErrorInfo {
+  const status = readStatusCode(error);
+  const rawMessage = error instanceof Error ? error.message : String(error);
+
+  // Rate limit: the SDK may surface it as 429 or a "rate limit" text body
+  if (status === 429) {
+    return { status: 429, message: ERROR_MESSAGES.rateLimit };
+  }
+
+  // Context length: Gemini reports "context length exceeded" / "token limit"
+  // on 400 (or a dedicated 413 for oversized requests when available)
+  if (status === 413 || (status === 400 && /context|token|length/i.test(rawMessage))) {
+    return { status: 400, message: ERROR_MESSAGES.contextLength };
+  }
+
+  // Fallback for non-SDK errors whose message still matches the old heuristics
+  if (rawMessage.includes("429") || /rate.?limit/i.test(rawMessage)) {
+    return { status: 429, message: ERROR_MESSAGES.rateLimit };
+  }
+
+  return { status: 500, message: ERROR_MESSAGES.generic };
+}

@@ -74,6 +74,8 @@ describe("NotesBuddy", () => {
     await generateStudySet("Memory management is the job of the OS.");
 
     fireEvent.click(screen.getByRole("button", { name: /new notes/i }));
+    // History lives behind the "Recent study sets" popover in the top bar
+    fireEvent.click(screen.getByRole("button", { name: /recent study sets/i }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /delete study set/i })).toBeInTheDocument()
     );
@@ -85,9 +87,12 @@ describe("NotesBuddy", () => {
     expect(toast).toHaveTextContent(/Deleted "Memory management is the job of the OS\."/);
     expect(toast).toHaveTextContent(/Undo/);
 
-    // localStorage loses the set…
+    // localStorage loses the set — and the recent-sets button disappears
+    // with it (nothing left to list)
     expect(JSON.parse(localStorage.getItem("capstone-study-sets") ?? "[]")).toHaveLength(0);
-    expect(screen.queryByText(/recent study sets/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /recent study sets/i })
+    ).not.toBeInTheDocument();
 
     // …until Undo is hit
     fireEvent.click(screen.getByRole("button", { name: /undo/i }));

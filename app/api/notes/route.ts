@@ -29,6 +29,7 @@ import {
   NOTES_GENERATION_CONFIG,
   NOTES_INPUT_LIMITS,
   ERROR_MESSAGES,
+  classifyModelError,
 } from "@/lib/config";
 import type { GenerationOptions } from "@/types/notes";
 import { DEFAULT_GENERATION_OPTIONS } from "@/types/notes";
@@ -156,14 +157,17 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    // Map provider rate limits to friendly copy; everything else is generic.
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("429") || /rate.?limit/i.test(message)) {
-      console.warn("[API/notes] Rate limited by provider");
-      return jsonError(ERROR_MESSAGES.rateLimit, 429);
+    // Classify provider failures (rate limits, context length) into friendly
+    // copy; everything else stays generic. See classifyModelError in
+    // lib/config.ts — it reads the SDK's structured statusCode, not just
+    // exception text.
+    const { message, status } = classifyModelError(error);
+    if (status === 500) {
+      console.error("[API/notes] Unhandled error:", error);
+    } else {
+      console.warn(`[API/notes] Provider error (${status}):`, error);
     }
-    console.error("[API/notes] Unhandled error:", error);
-    return jsonError(ERROR_MESSAGES.generic, 500);
+    return jsonError(message, status);
   }
 }
 

@@ -89,16 +89,20 @@ components/
                          # (key: capstone-study-sets, newest first, capped at 20, hydration-guarded)
                          # + undo-delete toast (8s), .json import, view transitions between screens
   notes-input.tsx        # Notes textarea (accepts pasted text OR a .txt/.md file), options chips,
-                         # 3-state Generate button + empty-state guidance card
+                         # 3-state Generate button + empty-state guidance card; hero -> compose mode
+                         # transition (first typing/sample click reveals chips + Generate)
+  input-top-bar.tsx      # Compact input-screen top bar: streak chip + stats popover + recent-sets
+                         # popover (StatsView / NotesHistory reuse; backdrop + Escape close)
   notes-history.tsx      # Saved study sets list: live search, reopen (free, no API call), per-row
                          # .json export, restore-backup import (strict validation), delete
   notes-result.tsx       # Tabbed artifact view: Summary | Flashcards | Quiz (pinned tab bar, scrolling
-                         # panel, dir=rtl for Urdu output)
+                         # panel, dir=rtl for Urdu output, setId prop feeds quiz persistence)
   flashcards-view.tsx    # Flip-card deck: browse (arrow keys + live front/back search), practice
                          # (shuffle, 1/2 marks, missed cards re-queued once, session score), study
                          # (SRS: 1/2/3 = Again/Good/Easy, due-card chip); Space to flip
   quiz-view.tsx          # Interactive MCQ quiz: lock-on-answer, instant feedback, live score, retake,
-                         # keys 1-9 answer next open question, Space jumps to it
+                         # keys 1-9 answer next open question, Space jumps to it; mid-quiz answers
+                         # persist per set under localStorage (persistKey -> lib/quiz-progress.ts)
   notes-chat.tsx         # Follow-up chat panel for a study set (useChat + /api/notes/chat, simple
                          # stick-to-bottom)
   weak-areas-view.tsx    # Most-missed cards/questions, jumps back to the exact item
@@ -117,8 +121,10 @@ lib/
   config.ts              # SINGLE SOURCE OF TRUTH: SYSTEM_PROMPT, buildNotesSystemPrompt(options),
                          # NOTES_FOLLOWUP_SYSTEM_PROMPT, DEFAULT_MODEL, GENERATION_CONFIG,
                          # NOTES_GENERATION_CONFIG, NOTES_INPUT_LIMITS, ERROR_MESSAGES,
-                         # EXPLAIN_SYSTEM_PROMPT
+                         # EXPLAIN_SYSTEM_PROMPT, classifyModelError (429 / context-length -> copy)
   export-notes.ts        # studySetToMarkdown + summaryToText + downloadMarkdown/downloadText/downloadJson
+  quiz-progress.ts       # Mid-quiz answer persistence: load/save/clear per set ("capstone-quiz-progress:<id>",
+                         # bounded against the current quiz) + pruneOrphanQuizProgress for deleted sets
   share-link.ts          # encode/decode a SavedStudySet into a URL-safe base64 payload
   view-transition.ts     # withViewTransition() — View Transition API wrapper (graceful, reduced-motion aware)
   srs.ts                 # Simplified SM-2: ratings, due logic, miss counting
