@@ -22,7 +22,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { History, Search, Share2, Trash2, Upload } from "lucide-react";
 import type { SavedStudySet } from "@/types/notes";
 import { downloadJson } from "@/lib/export-notes";
@@ -181,13 +181,19 @@ export function NotesHistory({ sets, onOpen, onDelete, onImport }: NotesHistoryP
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {filtered.map((set) => (
+          {/* AnimatePresence gives deleted rows a fade+collapse exit; rows
+              stagger in on mount / filter change (delay capped at 8 rows so
+              long lists never feel slow) */}
+          <AnimatePresence>
+            {filtered.map((set, i) => (
             <motion.li
               key={set.id}
               layout
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, delay: Math.min(i, 8) * 0.03 }}
+              className="overflow-hidden"
             >
               <div className="lift group flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-elevated px-3 py-2.5 hover:border-accent/30">
                 {/* Row body is the real button — the whole row opens the set */}
@@ -229,7 +235,8 @@ export function NotesHistory({ sets, onOpen, onDelete, onImport }: NotesHistoryP
                 </button>
               </div>
             </motion.li>
-          ))}
+            ))}
+          </AnimatePresence>
         </ul>
       )}
     </div>

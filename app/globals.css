@@ -316,6 +316,19 @@ body {
   transform: scale(0.96);
 }
 
+/* New-set arrival glow — a brief accent ring that fades over ~1.8s, so a
+   freshly generated study set is noticed at the top of the sidebar list
+   without being distracting. One-shot, transform-free (box-shadow only). */
+@keyframes new-item-glow {
+  0% { box-shadow: 0 0 0 rgba(214, 156, 174, 0); }
+  25% { box-shadow: 0 0 14px var(--color-accent-glow); }
+  100% { box-shadow: 0 0 0 rgba(214, 156, 174, 0); }
+}
+
+.new-item-glow {
+  animation: new-item-glow 1.8s ease-out 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

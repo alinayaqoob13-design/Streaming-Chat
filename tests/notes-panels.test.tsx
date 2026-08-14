@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NotesHistory } from "@/components/notes-history";
 import { NotesResult } from "@/components/notes-result";
 import type { SavedStudySet, StudyNotes } from "@/types/notes";
@@ -47,12 +47,16 @@ const SAVED: SavedStudySet = {
 // ---------------------------------------------------------------------------
 describe("NotesHistory", () => {
   it("renders nothing when there are no saved sets", () => {
-    const { container } = render(<NotesHistory sets={[]} onOpen={vi.fn()} onDelete={vi.fn()} />);
+    const { container } = render(
+      <NotesHistory sets={[]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
   it("lists sets with title, counts, and date", () => {
-    render(<NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} />);
+    render(
+      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+    );
     expect(screen.getByText("Operating Systems — Lecture 7")).toBeInTheDocument();
     expect(screen.getByText("2 flashcards · 1 quiz questions")).toBeInTheDocument();
     expect(screen.getByText("Aug 10")).toBeInTheDocument();
@@ -61,13 +65,109 @@ describe("NotesHistory", () => {
   it("opens a set on row click and deletes via the trash button", () => {
     const onOpen = vi.fn();
     const onDelete = vi.fn();
-    render(<NotesHistory sets={[SAVED]} onOpen={onOpen} onDelete={onDelete} />);
+    render(<NotesHistory sets={[SAVED]} onOpen={onOpen} onDelete={onDelete} onImport={vi.fn()} />);
 
     fireEvent.click(screen.getByText("Operating Systems — Lecture 7"));
     expect(onOpen).toHaveBeenCalledWith(SAVED);
 
     fireEvent.click(screen.getByRole("button", { name: /delete study set/i }));
     expect(onDelete).toHaveBeenCalledWith("set-1");
+  });
+
+  it("filters the list by title or flashcard term", async () => {
+    const other: SavedStudySet = {
+      ...SET,
+      id: "set-2",
+      title: "Databases — Lecture 2",
+      createdAt: SAVED.createdAt,
+      sourceNotes: "…",
+      // Unique card so the flashcard search can discriminate the sets
+      flashcards: [{ front: "What is a primary key?", back: "A unique row identifier." }],
+    };
+    render(
+      <NotesHistory sets={[SAVED, other]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+    );
+
+    // Title match
+    fireEvent.change(screen.getByLabelText(/search saved study sets/i), {
+      target: { value: "operating" },
+    });
+    expect(screen.getByText("Operating Systems — Lecture 7")).toBeInTheDocument();
+    // Non-matching rows linger briefly for the AnimatePresence exit — wait it out
+    await waitFor(() =>
+      expect(screen.queryByText("Databases — Lecture 2")).not.toBeInTheDocument()
+    );
+
+    // Flashcard-term match (only the DATABASES set carries a unique term)
+    fireEvent.change(screen.getByLabelText(/search saved study sets/i), {
+      target: { value: other.flashcards[0].front },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("Operating Systems — Lecture 7")).not.toBeInTheDocument()
+    );
+    expect(screen.getByText("Databases — Lecture 2")).toBeInTheDocument();
+
+    // No matches → friendly empty state, list is gone
+    fireEvent.change(screen.getByLabelText(/search saved study sets/i), {
+      target: { value: "zzz-no-such-term" },
+    });
+    expect(screen.getByText(/no saved sets match/i)).toBeInTheDocument();
+  });
+
+  it("exports a set as .json via the share button", () => {
+    const createUrl = vi.fn(() => "blob:mock");
+    const revokeUrl = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL: createUrl, revokeObjectURL: revokeUrl });
+    render(
+      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /export study set/i }));
+    expect(createUrl).toHaveBeenCalledTimes(1);
+    expect(revokeUrl).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("restores a valid .json backup and rejects a broken one", async () => {
+    const onImport = vi.fn();
+    const { container } = render(
+      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={onImport} />
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+
+    // jsdom's File class sometimes lacks text() entirely — define it first so
+    // the spy below has something to wrap, then stub it with the contents we
+    // plan to feed in order (valid backup, then junk).
+    if (!("text" in File.prototype)) {
+      Object.defineProperty(File.prototype, "text", {
+        configurable: true,
+        value: async function text() {
+          throw new Error("not implemented");
+        },
+      });
+    }
+    const textCalls = [JSON.stringify({ ...SAVED, id: "imported-id", title: "From backup" }), "not json at all"];
+    const textMock = vi
+      .spyOn(File.prototype, "text")
+      .mockImplementation(() => Promise.resolve(textCalls.shift() ?? ""));
+
+    // Valid backup…
+    const valid = new File([""], "backup.json", { type: "application/json" });
+    fireEvent.change(input, { target: { files: [valid as unknown as File] } });
+    await waitFor(() =>
+      expect(onImport).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "imported-id", title: "From backup" })
+      )
+    );
+
+    // …and a clearly malformed one is refused.
+    window.alert = vi.fn();
+    const junk = new File([""], "junk.json", { type: "application/json" });
+    fireEvent.change(input, { target: { files: [junk as unknown as File] } });
+    await waitFor(() => expect(window.alert).toHaveBeenCalledTimes(1));
+    expect(onImport).toHaveBeenCalledTimes(1);
+
+    textMock.mockRestore();
   });
 });
 
@@ -94,6 +194,67 @@ describe("NotesResult", () => {
   it("renders the panel right-to-left for Urdu output", () => {
     const { container } = render(<NotesResult result={SET} language="ur" />);
     expect(container.querySelector('[dir="rtl"]')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NotesResult — Weak Areas (Phase 6B)
+// ---------------------------------------------------------------------------
+describe("NotesResult — Weak Areas", () => {
+  const WEAK_SET: StudyNotes = {
+    summary: "x",
+    flashcards: [
+      { front: "Missed card A", back: "back of A", missCount: 3 },
+      { front: "Shaky card B", back: "back of B", missCount: 2 },
+      { front: "Clean card C", back: "back of C" },
+    ],
+    quiz: [
+      {
+        question: "Tricky question?",
+        options: ["a", "b", "c", "d"],
+        correctIndex: 0,
+        explanation: "e",
+        missCount: 2,
+      },
+    ],
+  };
+
+  it("counts qualifying items on the tab and lists them sorted by misses", async () => {
+    render(<NotesResult result={WEAK_SET} />);
+    fireEvent.click(screen.getByRole("tab", { name: /weak areas \(3\)/i }));
+
+    expect(await screen.findByText("Missed card A")).toBeInTheDocument();
+    expect(screen.getByText("Shaky card B")).toBeInTheDocument();
+    expect(screen.getByText("Tricky question?")).toBeInTheDocument();
+    // Below threshold — filtered out entirely
+    expect(screen.queryByText("Clean card C")).not.toBeInTheDocument();
+    // Most-missed first, ties keep source order
+    const badges = screen.getAllByText(/^\d+ misses?$/);
+    expect(badges[0]).toHaveTextContent("3 misses");
+  });
+
+  it("shows an empty state when nothing qualifies", async () => {
+    render(<NotesResult result={SET} />);
+    fireEvent.click(screen.getByRole("tab", { name: /weak areas \(0\)/i }));
+    expect(await screen.findByText("No weak areas yet")).toBeInTheDocument();
+  });
+
+  it("jumps to a specific flashcard from a weak item", async () => {
+    render(<NotesResult result={WEAK_SET} />);
+    fireEvent.click(screen.getByRole("tab", { name: /weak areas \(3\)/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /review flashcard 2/i }));
+
+    // Landed on the flashcards tab at exactly that card
+    expect(await screen.findByText("Card 2 of 3 — click the card to flip")).toBeInTheDocument();
+    expect(screen.getByText("Shaky card B")).toBeInTheDocument();
+  });
+
+  it("jumps to a specific quiz question from a weak item", async () => {
+    render(<NotesResult result={WEAK_SET} />);
+    fireEvent.click(screen.getByRole("tab", { name: /weak areas \(3\)/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /review question 1/i }));
+
+    expect(await screen.findByText("Tricky question?")).toBeInTheDocument();
   });
 });
 
