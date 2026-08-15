@@ -1,18 +1,12 @@
 /**
  * ============================================================================
- * SPLASH SCREEN — BROWSER-SESSION STARTUP OVERLAY
+ * SPLASH SCREEN — STARTUP OVERLAY ON EVERY PAGE LOAD
  * ============================================================================
  *
- * A brief, premium splash shown on the first load of each browser session
- * (tab), before the app settles into its main view.
- *
- * Persistence: sessionStorage key `hasSeenSplash` (per project convention
- * names are camelCase scoped keys) — NEVER localStorage:
- *   - first load in a new tab/session → splash plays
- *   - reload in the same tab        → splash is skipped (sessionStorage
- *                                     survives reloads)
- *   - internal navigation/re-render → splash is skipped
- *   - a genuinely new tab/session   → splash may play again
+ * A brief, premium splash shown on EVERY full page load (refresh / new tab),
+ * before the app settles into its main view. In-app client-side remounts
+ * (navigating away and back within the same loaded page) do NOT replay it —
+ * the module-scope flag only resets on a genuine page load.
  *
  * Timing: minimum visible duration ~1.6s + 0.45s fade (total ~2s). Never
  * artificially delayed beyond that — if the app is ready immediately the
@@ -35,38 +29,29 @@ import { useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Sparkles } from "lucide-react";
 
-// sessionStorage key — scoped to the tab so every fresh session gets one
-// splash and reloads in the same tab don't. Never use localStorage here.
-const SPLASH_KEY = "hasSeenSplash";
+// Module-scope flag — resets on every FULL page load (refresh, new tab) and
+// survives only in-app client remounts. That is exactly the required
+// behavior: the splash plays on every refresh, but never twice within one
+// loaded page (e.g. navigating to /share and back must not replay it).
+let splashPlayedThisPageLoad = false;
+
+/** Test-only hook — resets the page-load flag between tests. */
+export function __resetSplashForTests() {
+  splashPlayedThisPageLoad = false;
+}
+
 // Minimum time the splash stays fully visible before the fade begins.
 const MIN_VISIBLE_MS = 1600;
 // Duration of the exit fade before the overlay unmounts.
 const FADE_MS = 450;
 
-function readSplashSeen(): boolean {
-  try {
-    return sessionStorage.getItem(SPLASH_KEY) === "true";
-  } catch {
-    // Storage unavailable (private mode etc.) — just don't block startup.
-    return false;
-  }
-}
-
-function writeSplashSeen() {
-  try {
-    sessionStorage.setItem(SPLASH_KEY, "true");
-  } catch {
-    // Best-effort: splash re-shows next session, harmless.
-  }
-}
-
 export function SplashGate({ children }: { children: React.ReactNode }) {
   // Startup state is tri-state, and the DEFAULT must never be "app visible":
   //   - null  → startup unresolved (SSR + first client render) — a neutral
   //             opaque frame is shown INSTEAD of children, so the home
-  //             screen can never flash before the sessionStorage check runs
+  //             screen can never flash before the check runs
   //   - true  → splash overlay owns the screen (children inert underneath)
-  //   - false → resolved: straight into the app (same-tab reload)
+  //   - false → resolved: straight into the app (in-app remount)
   // React 19 supports boolean-ish state cleanly; keep the initial value null
   // so SSR and hydration paint the identical neutral tree (no mismatch).
   const [showSplash, setShowSplash] = useState<boolean | null>(null);
@@ -74,19 +59,19 @@ export function SplashGate({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    // Session already saw the splash → resolve straight into the app.
-    if (readSplashSeen()) {
+    // Same loaded page (in-app remount) → resolve straight into the app.
+    if (splashPlayedThisPageLoad) {
       setShowSplash(false);
       return;
     }
 
-    // Otherwise: play the splash, hold for the minimum duration, record
-    // "seen" BEFORE the fade (a reload mid-fade must not replay it), then
-    // unmount. The app underneath never remounts.
+    // Every full page load lands here: play the splash, hold for the minimum
+    // duration, then fade and unmount. The flag is set BEFORE the fade — an
+    // in-app remount mid-fade must not restart it.
+    splashPlayedThisPageLoad = true;
     setShowSplash(true);
     let cancelled = false;
     const holdTimer = window.setTimeout(() => {
-      writeSplashSeen();
       setLeaving(true);
       window.setTimeout(() => {
         if (!cancelled) setShowSplash(false);
