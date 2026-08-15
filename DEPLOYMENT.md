@@ -65,5 +65,5 @@ npm run build
 
 | Role | Name | Date |
 |---|---|---|
-| Developer | | |
-| Reviewer (if any) | | |
+| Developer | Alina Yaqoob | 2026-08-03 → 2026-08-14 (capstone period) |
+| Reviewer (if any) | Alina Yaqoob | 2026-08-14 |
