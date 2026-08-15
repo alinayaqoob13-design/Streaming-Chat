@@ -124,16 +124,29 @@ describe("NotesBuddy", () => {
     );
   });
 
-  it("opens the export menu with Word and PDF options on the result screen", async () => {
+  it("Export downloads a Word document directly; Print and Share are gone", async () => {
+    const createObjectURL = vi.fn().mockReturnValue("blob:doc");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(window, "URL", {
+      value: { createObjectURL, revokeObjectURL },
+      configurable: true,
+    });
+    const click = vi.fn();
+    const originalCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = originalCreate(tag);
+      if (tag === "a") el.click = click;
+      return el;
+    });
+
     await generateStudySet("Memory management is the job of the OS.");
 
-    fireEvent.click(screen.getByRole("button", { name: /export study set/i }));
-    expect(screen.getByRole("menuitem", { name: /word document/i })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /pdf/i })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /markdown/i })).toBeInTheDocument();
+    // One click — no menu — downloads the .doc
+    fireEvent.click(screen.getByRole("button", { name: /word document/i }));
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
 
-    // Escape closes the menu
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("menuitem", { name: /word document/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /print/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /share this set/i })).not.toBeInTheDocument();
   });
 });

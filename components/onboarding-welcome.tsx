@@ -7,15 +7,14 @@
  * three things the app can do (paste & generate, study, track & chat) before
  * the user touches anything.
  *
- * Persistence: localStorage key `capstone-onboarding-done` (per project
- * convention, study-set persistence uses the `capstone-` scope):
- *   - first ever visit (flag unset) → the dialog opens once the splash
- *     clears; it sits on top of the real app, which mounts underneath
- *   - any later visit (flag set)    → the dialog never opens again, even a
- *     full browser restart
+ * Persistence: a module-scope flag (see below) — the welcome shows on EVERY
+ * full page load (refresh / new tab) and never replays within the same
+ * loaded page:
+ *   - full page load            → the dialog opens once the splash clears
+ *   - in-app remount/navigation → the dialog does not re-open
  *
- * The flag is written BEFORE the exit animation starts — a reload mid-exit
- * must not re-show the welcome.
+ * The flag is set BEFORE the exit animation starts — a remount mid-exit
+ * must not re-open the welcome.
  *
  * Interaction: 3 slides (Next/Back), Skip on every step, Escape dismisses,
  * and the primary action is auto-focused. The final step's button reads
@@ -34,29 +33,19 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Sparkles, Brain, MessageCircle } from "lucide-react";
 
-// localStorage key — "done" means the welcome has been dismissed once,
-// forever. Never use sessionStorage here: this is a lifetime flag.
-const ONBOARDING_KEY = "capstone-onboarding-done";
+// Module-scope flag — resets on every FULL page load (refresh / new tab),
+// so the welcome shows on every refresh; it survives only in-app client
+// remounts (navigating away and back within one loaded page must not replay
+// it). Same pattern as SplashGate. No storage is used at all.
+let onboardingShownThisPageLoad = false;
+
+/** Test-only hook — resets the page-load flag between tests. */
+export function __resetOnboardingForTests() {
+  onboardingShownThisPageLoad = false;
+}
+
 // Exit fade before the overlay unmounts (mirrors the splash's timing).
 const EXIT_MS = 220;
-
-function readOnboardingDone(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDING_KEY) === "true";
-  } catch {
-    // Storage unavailable (private mode etc.) — just don't block startup:
-    // the welcome silently never shows.
-    return true;
-  }
-}
-
-function writeOnboardingDone() {
-  try {
-    localStorage.setItem(ONBOARDING_KEY, "true");
-  } catch {
-    // Best-effort: the welcome politely re-shows next visit, harmless.
-  }
-}
 
 // Three slides, one per core capability. Keep the copy short — it must fit
 // on a 320px phone in three lines or fewer.
@@ -87,16 +76,17 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    // First EVER visit → show the welcome. Any visit after that, skip.
+    // Every FULL page load → show the welcome (module flag resets on load).
     // Read in an effect (not the initializer) so SSR and hydration render
     // the same tree, then the dialog pops in on the client only.
-    if (!readOnboardingDone()) setOpen(true);
+    if (!onboardingShownThisPageLoad) setOpen(true);
     setReady(true);
   }, []);
 
   const handleDismiss = useCallback(() => {
-    // Record "done" BEFORE the fade — a reload mid-exit must not re-show.
-    writeOnboardingDone();
+    // Record "shown" BEFORE the fade — an in-app remount mid-exit must not
+    // re-open the dialog.
+    onboardingShownThisPageLoad = true;
     setLeaving(true);
     window.setTimeout(() => setOpen(false), reduceMotion ? 0 : EXIT_MS);
   }, [reduceMotion]);

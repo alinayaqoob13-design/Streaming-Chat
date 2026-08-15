@@ -620,7 +620,7 @@ export function FlashcardsView({ flashcards, sourceNotes, onRateCard, initialInd
                   <motion.div
                     animate={{ rotateY: flipped ? 180 : 0, scale: flipped ? 0.95 : 1 }}
                     transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-                    className="preserve-3d relative h-full w-full"
+                    className="preserve-3d absolute inset-0"
                   >
                     {cardFace}
                   </motion.div>
@@ -645,7 +645,7 @@ export function FlashcardsView({ flashcards, sourceNotes, onRateCard, initialInd
                 />
                 <div
                   className={cn(
-                    "preserve-3d relative h-full w-full transition-transform duration-500",
+                    "preserve-3d absolute inset-0 transition-transform duration-500",
                     flipped && "rotate-y-180"
                   )}
                 >

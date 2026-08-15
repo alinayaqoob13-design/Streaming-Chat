@@ -2,20 +2,20 @@
  * ============================================================================
  * COMPONENT TESTS — components/onboarding-welcome.tsx
  * ============================================================================
- * OnboardingGate lifecycle:
- *   - first EVER visit (no capstone-onboarding-done in localStorage) → the
- *     welcome dialog opens over the app, which stays mounted underneath
+ * OnboardingGate lifecycle (updated contract):
+ *   - EVERY full page load (refresh / new tab) → the welcome dialog opens
+ *     over the app, which stays mounted underneath
  *   - Next/Back walk the three slides; the final step says "Start studying"
- *   - Skip (any step), Start studying, and Escape all record the flag BEFORE
- *     the exit fade, then remove the dialog
- *   - any later visit (flag set) → the dialog never opens
- *   - the flag lives in localStorage ONLY — sessionStorage is untouched
+ *   - Skip (any step), Start studying, and Escape all mark the page-load flag
+ *     BEFORE the exit fade, then remove the dialog
+ *   - in-app remount within the same loaded page → the dialog never re-opens
+ *   - no storage is used at all
  * ============================================================================
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, fireEvent, within } from "@testing-library/react";
-import { OnboardingGate } from "@/components/onboarding-welcome";
+import { OnboardingGate, __resetOnboardingForTests } from "@/components/onboarding-welcome";
 
 // Matches the constant in the component — duplicates it deliberately so a
 // timing change fails loudly instead of passing quietly.
@@ -31,18 +31,15 @@ function renderApp() {
 
 describe("OnboardingGate", () => {
   beforeEach(() => {
-    localStorage.clear();
-    sessionStorage.clear();
+    __resetOnboardingForTests();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    localStorage.clear();
-    sessionStorage.clear();
   });
 
-  it("opens the welcome dialog on the first ever visit", () => {
+  it("opens the welcome dialog on every page load", () => {
     renderApp();
 
     const dialog = screen.getByRole("dialog");
@@ -72,31 +69,37 @@ describe("OnboardingGate", () => {
     fireEvent.click(within(dialog()).getByRole("button", { name: "Next" }));
     expect(within(dialog()).getByText("Track & chat")).toBeInTheDocument();
 
-    // The flag is written BEFORE the exit fade…
     fireEvent.click(within(dialog()).getByRole("button", { name: "Start studying" }));
-    expect(localStorage.getItem("capstone-onboarding-done")).toBe("true");
 
-    // …and the dialog is gone after the fade, app fully interactive.
+    // The dialog is gone after the fade, app fully interactive.
     act(() => vi.advanceTimersByTime(EXIT_MS + 1));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("app content behind the welcome")).toBeInTheDocument();
   });
 
-  it("Skip dismisses from any step and never returns", () => {
+  it("Skip dismisses and does not re-open on an in-app remount", () => {
     const first = renderApp();
-    const dialog = first.getByRole("dialog");
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "Skip" }));
-    expect(localStorage.getItem("capstone-onboarding-done")).toBe("true");
+    fireEvent.click(within(first.getByRole("dialog")).getByRole("button", { name: "Skip" }));
 
     act(() => vi.advanceTimersByTime(EXIT_MS + 1));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     first.unmount();
 
-    // A fresh mount with the flag set → no dialog, straight into the app.
+    // Same loaded page → no dialog, straight into the app.
     renderApp();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("app content behind the welcome")).toBeInTheDocument();
+  });
+
+  it("shows again after a simulated fresh page load (module reset)", () => {
+    const first = renderApp();
+    fireEvent.click(within(first.getByRole("dialog")).getByRole("button", { name: "Skip" }));
+    act(() => vi.advanceTimersByTime(EXIT_MS + 1));
+    first.unmount();
+
+    __resetOnboardingForTests(); // a real refresh reloads the module
+    renderApp();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("Escape dismisses the welcome from any step", () => {
@@ -104,18 +107,17 @@ describe("OnboardingGate", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(localStorage.getItem("capstone-onboarding-done")).toBe("true");
 
     act(() => vi.advanceTimersByTime(EXIT_MS + 1));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("only ever touches localStorage — sessionStorage is never written", () => {
+  it("writes nothing to any storage", () => {
     renderApp();
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
     act(() => vi.advanceTimersByTime(EXIT_MS + 1));
 
-    expect(localStorage.getItem("capstone-onboarding-done")).toBe("true");
-    expect(sessionStorage.getItem("capstone-onboarding-done")).toBeNull();
+    expect(localStorage.getItem("capstone-onboarding-done")).toBeNull();
+    expect(sessionStorage.length).toBe(0);
   });
 });
