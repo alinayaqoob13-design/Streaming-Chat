@@ -195,7 +195,7 @@ This project is configured for **Vercel** deployment.
 - Rollback is instant and preserves all localStorage data (per-browser)
 
 ### Live Demo
-The application is deployed at: **https://streaming-chat-capstone.vercel.app** (requires Gemini API key for full functionality; demo mode available with sample notes).
+The application is deployed at: **https://ai-study-notes-buddy.vercel.app**
 
 ## Reflection
-*This section is reserved for the project owner's personal reflection — written in their own words about their actual experience, challenges, and what they'd do differently. This is explicitly graded on being honest and first-person — not AI-generated content.*
+See [`REFLECTION.md`](./REFLECTION.md) — the project owner's first-person reflection on what was hardest, what she'd do differently, and what surprised her.
