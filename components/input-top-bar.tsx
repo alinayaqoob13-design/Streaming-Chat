@@ -42,7 +42,6 @@ interface InputTopBarProps {
   sets: SavedStudySet[];
   onOpenSet: (set: SavedStudySet) => void;
   onDeleteSet: (id: string) => void;
-  onImportSet: (set: SavedStudySet) => void;
   onStartMixedPractice: () => void;
 }
 
@@ -109,7 +108,6 @@ export function InputTopBar({
   sets,
   onOpenSet,
   onDeleteSet,
-  onImportSet,
   onStartMixedPractice,
 }: InputTopBarProps) {
   const [panel, setPanel] = useState<PanelKind>(null);
@@ -168,7 +166,6 @@ export function InputTopBar({
                 sets={sets}
                 onOpen={onOpenSet}
                 onDelete={onDeleteSet}
-                onImport={onImportSet}
               />
             </div>
           </Panel>

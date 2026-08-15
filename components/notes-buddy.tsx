@@ -335,16 +335,6 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
       return next;
     });
   }, []);
-  // A .json backup was restored via NotesHistory — dedupe by id (re-importing
-  // the same file updates the stored copy instead of duplicating it) and cap.
-  const handleImportSet = useCallback((set: SavedStudySet) => {
-    setSavedSets((prev) => {
-      const withoutDuplicate = prev.filter((s) => s.id !== set.id);
-      const next = [set, ...withoutDuplicate].slice(0, MAX_SAVED_SETS);
-      saveSetsToStorage(next);
-      return next;
-    });
-  }, []);
 
   // Phase 6 SRS: a flashcard was rated in the study (SRS) mode. Update both
   // the on-screen result and the matching saved set, persisting back to the
@@ -416,7 +406,6 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
             sets={hasMounted ? savedSets : []}
             onOpenSet={handleOpenSet}
             onDeleteSet={handleDeleteSet}
-            onImportSet={handleImportSet}
             onStartMixedPractice={() => router.push("/mixed-practice")}
           />
         </div>

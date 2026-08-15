@@ -48,14 +48,14 @@ const SAVED: SavedStudySet = {
 describe("NotesHistory", () => {
   it("renders nothing when there are no saved sets", () => {
     const { container } = render(
-      <NotesHistory sets={[]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+      <NotesHistory sets={[]} onOpen={vi.fn()} onDelete={vi.fn()} />
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   it("lists sets with title, counts, and date", () => {
     render(
-      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} />
     );
     expect(screen.getByText("Operating Systems — Lecture 7")).toBeInTheDocument();
     expect(screen.getByText("2 flashcards · 1 quiz questions")).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("NotesHistory", () => {
   it("opens a set on row click and deletes via the trash button", () => {
     const onOpen = vi.fn();
     const onDelete = vi.fn();
-    render(<NotesHistory sets={[SAVED]} onOpen={onOpen} onDelete={onDelete} onImport={vi.fn()} />);
+    render(<NotesHistory sets={[SAVED]} onOpen={onOpen} onDelete={onDelete} />);
 
     fireEvent.click(screen.getByText("Operating Systems — Lecture 7"));
     expect(onOpen).toHaveBeenCalledWith(SAVED);
@@ -85,7 +85,7 @@ describe("NotesHistory", () => {
       flashcards: [{ front: "What is a primary key?", back: "A unique row identifier." }],
     };
     render(
-      <NotesHistory sets={[SAVED, other]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+      <NotesHistory sets={[SAVED, other]} onOpen={vi.fn()} onDelete={vi.fn()} />
     );
 
     // Title match
@@ -114,60 +114,13 @@ describe("NotesHistory", () => {
     expect(screen.getByText(/no saved sets match/i)).toBeInTheDocument();
   });
 
-  it("exports a set as .json via the share button", () => {
-    const createUrl = vi.fn(() => "blob:mock");
-    const revokeUrl = vi.fn();
-    vi.stubGlobal("URL", { ...URL, createObjectURL: createUrl, revokeObjectURL: revokeUrl });
+  it("does not render share/restore controls — delete only per row", () => {
     render(
-      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={vi.fn()} />
+      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} />
     );
-
-    fireEvent.click(screen.getByRole("button", { name: /export study set/i }));
-    expect(createUrl).toHaveBeenCalledTimes(1);
-    expect(revokeUrl).toHaveBeenCalledTimes(1);
-    vi.unstubAllGlobals();
-  });
-
-  it("restores a valid .json backup and rejects a broken one", async () => {
-    const onImport = vi.fn();
-    const { container } = render(
-      <NotesHistory sets={[SAVED]} onOpen={vi.fn()} onDelete={vi.fn()} onImport={onImport} />
-    );
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-
-    // jsdom's File class sometimes lacks text() entirely — define it first so
-    // the spy below has something to wrap, then stub it with the contents we
-    // plan to feed in order (valid backup, then junk).
-    if (!("text" in File.prototype)) {
-      Object.defineProperty(File.prototype, "text", {
-        configurable: true,
-        value: async function text() {
-          throw new Error("not implemented");
-        },
-      });
-    }
-    const textCalls = [JSON.stringify({ ...SAVED, id: "imported-id", title: "From backup" }), "not json at all"];
-    const textMock = vi
-      .spyOn(File.prototype, "text")
-      .mockImplementation(() => Promise.resolve(textCalls.shift() ?? ""));
-
-    // Valid backup…
-    const valid = new File([""], "backup.json", { type: "application/json" });
-    fireEvent.change(input, { target: { files: [valid as unknown as File] } });
-    await waitFor(() =>
-      expect(onImport).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "imported-id", title: "From backup" })
-      )
-    );
-
-    // …and a clearly malformed one is refused.
-    window.alert = vi.fn();
-    const junk = new File([""], "junk.json", { type: "application/json" });
-    fireEvent.change(input, { target: { files: [junk as unknown as File] } });
-    await waitFor(() => expect(window.alert).toHaveBeenCalledTimes(1));
-    expect(onImport).toHaveBeenCalledTimes(1);
-
-    textMock.mockRestore();
+    expect(screen.queryByRole("button", { name: /export study set/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/restore backup/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /delete study set/i })).toBeInTheDocument();
   });
 });
 

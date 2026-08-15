@@ -42,7 +42,6 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof InputTopBar>> 
     streak: STREAK,
     onOpenSet: vi.fn(),
     onDeleteSet: vi.fn(),
-    onImportSet: vi.fn(),
     onStartMixedPractice: vi.fn(),
   };
   return render(
