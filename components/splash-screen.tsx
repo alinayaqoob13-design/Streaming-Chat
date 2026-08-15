@@ -41,9 +41,11 @@ export function __resetSplashForTests() {
 }
 
 // Minimum time the splash stays fully visible before the fade begins.
-const MIN_VISIBLE_MS = 1600;
+// Kept deliberately short: the splash is a brand beat, and every extra
+// millisecond here is added to the hero's LCP (Lighthouse performance).
+const MIN_VISIBLE_MS = 800;
 // Duration of the exit fade before the overlay unmounts.
-const FADE_MS = 450;
+const FADE_MS = 300;
 
 export function SplashGate({ children }: { children: React.ReactNode }) {
   // Startup state is tri-state, and the DEFAULT must never be "app visible":

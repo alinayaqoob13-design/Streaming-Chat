@@ -21,8 +21,8 @@ import { SplashGate, __resetSplashForTests } from "@/components/splash-screen";
 
 // Matches the constants in the component — duplicates them deliberately so
 // a timing change in the component fails loudly instead of passing quietly.
-const MIN_VISIBLE_MS = 1600;
-const FADE_MS = 450;
+const MIN_VISIBLE_MS = 800;
+const FADE_MS = 300;
 
 function renderApp() {
   return render(

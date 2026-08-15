@@ -1,27 +1,13 @@
-# Reflection — AI Study Notes Buddy (Capstone)
+# Reflection — AI Study Notes Buddy
 
-Use this template to write your 1-page reflection. Replace each prompt with your honest experience.
+When I started this capstone, I thought the hard part would be the AI. It wasn't. The AI call is honestly the easiest fifteen lines in the whole project. The hard part was everything around it — the stuff nobody screenshots.
 
-## What problem does this app solve?
+**The hardest thing** was chasing bugs that only exist in a real browser. My favorite example: flashcards looked perfect in my tests, but in Chrome the question text was completely invisible. It took me an embarrassing amount of time to find it — the 3D flip container was collapsing to zero height because `h-full` can't resolve against a parent sized with `min-height`. Fifty pixels of invisible card. My unit tests were green the whole time because jsdom doesn't actually paint anything. That one bug taught me more about the difference between "tests pass" and "the app works" than any lecture this term. Same story with the Word export — downloads were silently canceling in Chrome because I revoked the blob URL one line too early. And the "white screen of death" my app kept showing on refresh? A stale service worker from an old build was serving dead JavaScript chunks. I didn't even know browsers kept those alive.
 
-For COMSATS students (including myself), lecture notes are often long and unstructured. This app turns pasted notes into a summary, flashcards, and a quiz — plus spaced-repetition review and weak-area tracking — so studying becomes active instead of passive re-reading.
+**What I'd do differently next time:** commit smaller and commit earlier. There was a stretch where a lot of work existed only on my laptop, uncommitted — and the Vercel build was quietly broken the whole time because imports pointed at files that weren't in the repo. I found out way too late. Next time: push first, polish second. I'd also run the real browser earlier instead of trusting the test suite, and I'd keep the sidebar/layout stable instead of rebuilding it mid-project — rebuilding working UI cost me days I could have spent on actual features.
 
-## What was hardest? Why?
+**What surprised me** was how little the model matters compared to the plumbing around it. Everyone talks about prompts, but the thing that made this app actually usable was boring engineering: zod validation so a bad model response can never break the UI, localStorage guards so a refresh never loses work, and honest error states that tell you what went wrong instead of a spinner forever. The AI is the demo; the plumbing is the product.
 
-- *Prompt engineering & structured output:* getting Gemini to consistently return valid JSON matching the zod schema across English and Urdu notes took iteration.
-- *Local-first state:* everything lives in `localStorage`, so deep links, share links, undo, and import/export all had to be designed around a single browser boundary.
-- *Accessibility:* making keyboard shortcuts, focus rings, and screen-reader announcements coexist with animations was more detail work than expected.
+I also didn't expect to enjoy the accessibility work, but forcing myself to make everything keyboard-navigable and screen-reader labeled made the whole UI better for everyone, including me. Turns out constraints are just design decisions you haven't made yet.
 
-## What would you do differently next time?
-
-- *Start smaller:* I added several "nice-to-have" features (SRS, share links, mixed practice) that are valuable, but I would sequence them more strictly after the core flow is rock-solid.
-- *Test earlier:* writing component tests alongside each feature, rather than in batches, would have caught integration issues sooner.
-- *Use a lightweight backend:* for a real product I would add a tiny backend for accounts/sync so share links and cross-device access don't rely on long URLs.
-
-## One thing you learned that surprised you
-
-That **structured output + validation on the server** is far more reliable for AI-powered UIs than parsing free-form text in the browser. Once the zod schema was in place, the whole UI became predictable even when the model's wording changed.
-
-## Honest note on scope
-
-This app is intentionally local-only and uses a free Gemini key. The "AI" is meaningful because it transforms notes into three grounded artifacts and answers follow-up questions strictly from those notes — it is not a generic chatbot echo.
+If you're reading this as the next person on the project: run it, break it, refresh it fifty times, and watch the network tab. The bugs are in the gaps between the tools, not in the code.
