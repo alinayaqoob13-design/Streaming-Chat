@@ -19,7 +19,7 @@
  * ============================================================================
  */
 
-const CACHE = "notes-buddy-v1";
+const CACHE = "notes-buddy-v2";
 
 // Take over immediately so newly-installed workers control the page now,
 // not after the next reload.
