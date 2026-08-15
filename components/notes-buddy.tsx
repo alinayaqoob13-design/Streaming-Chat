@@ -270,8 +270,10 @@ export default function NotesBuddy({ initialSetId }: { initialSetId?: string }) 
       setStatus("input");
       setActiveSetId(null);
     });
-    router.push(`/`);
-  }, []);
+    // Skip the navigation when already on "/" — pushing the current route
+    // fires an RSC fetch that gets aborted (harmless but noisy in devtools)
+    if (pathname !== "/") router.push(`/`);
+  }, [pathname]);
 
   // Reopen a saved set — no API call, everything renders from localStorage.
   // sourceNotes restores the follow-up chat's grounding too.

@@ -80,7 +80,8 @@ describe("downloadMarkdown()", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates a blob URL, clicks a link, and revokes the URL", () => {
+  it("creates a blob URL, clicks a link, and revokes the URL after the download starts", () => {
+    vi.useFakeTimers();
     const createObjectURL = vi.fn().mockReturnValue("blob:mock");
     const revokeObjectURL = vi.fn();
     Object.defineProperty(window, "URL", {
@@ -99,7 +100,11 @@ describe("downloadMarkdown()", () => {
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
+    // Revoke is deferred — a synchronous revoke cancels the download in Chrome
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1100);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+    vi.useRealTimers();
   });
 });
 
@@ -165,6 +170,7 @@ describe("downloadText()", () => {
   });
 
   it("downloads a text/plain blob named .txt", () => {
+    vi.useFakeTimers();
     const createObjectURL = vi.fn().mockReturnValue("blob:txt");
     const revokeObjectURL = vi.fn();
     Object.defineProperty(window, "URL", {
@@ -184,6 +190,8 @@ describe("downloadText()", () => {
     const blob = createObjectURL.mock.calls[0][0] as Blob;
     expect(blob.type).toBe("text/plain;charset=utf-8");
     expect(click).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1100);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:txt");
+    vi.useRealTimers();
   });
 });

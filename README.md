@@ -55,23 +55,19 @@ app/              # Next.js 13+ App Router
 components/       # React components
   notes-input.tsx     # Hero + textarea + generate flow (Phases 5-10)
   notes-buddy.tsx     # State orchestrator (input/generating/result/error)
-  notes-result.tsx    # Tabbed view: Summary | Flashcards | Quiz
-  flashcards-view.tsx # Browse/practice/study SRS modes
-  flashcards-tts.tsx  # Text-to-speech for flashcards
+  notes-result.tsx    # Tabbed view: Summary | Flashcards | Quiz | Weak areas
+  flashcards-view.tsx # Browse/practice/study SRS modes (flip cards + TTS listen)
   notes-chat.tsx      # Follow-up chat about a study set
   input-top-bar.tsx   # Streak chip + stats + recent sets popover
-  share-button.tsx    # Copy shared link generation
-  share-link.tsx      # Encode/decode shared study sets
   streak-display.tsx  # Daily streak chip
   weak-areas-view.tsx # Most-missed cards/questions queries
 
 lib/              # Utility libraries and pure logic
   config.ts              # SINGLE SOURCE OF TRUTH: system prompts, generation config
-  export-notes.ts        # summaryToText + downloadMarkdown/downloadText/downloadJson
+  export-notes.ts        # studySetToWordHtml + downloadWord (.doc), markdown/txt helpers
   quiz-progress.ts       # Mid-quiz answer persistence per set
   srs.ts                 # Simplified SM-2: ratings, due logic, miss counting
   share-link.ts          # encode/decode a SavedStudySet into URL-safe base64
-  srs.ts                 # Simplified SM-2: ratings, due logic, miss counting
   streak.ts              # Daily streak: local date keys, one count/day, best-streak
   utils.ts               # cn(), formatTime(), generateId(), debounce()
   view-transition.ts     # View Transition API wrapper

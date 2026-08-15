@@ -218,6 +218,13 @@ function downloadFile(filename: string, blob: Blob): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  // Appended to the DOM (Firefox ignores detached-anchor downloads) and
+  // removed again immediately after the click.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Revoke only AFTER the download has started — revoking synchronously
+  // right after a.click() cancels the in-flight download in Chrome
+  // (verified: Browser.downloadProgress reported "canceled", no file).
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
