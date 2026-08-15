@@ -1,201 +1,144 @@
 # AI Study Notes Buddy
 
-## Project Overview
-AI Study Notes Buddy is a web application that helps students transform lecture notes into comprehensive study materials using AI. Students can paste their lecture notes or import files, and the application generates a summary, flashcards, and a quiz — all grounded solely in the pasted content, nothing invented.
+> Paste your lecture notes — get a **summary**, **flashcards**, and a **quiz**, grounded only in what you pasted. Then study them with spaced repetition, track your weak areas, and ask follow-up questions answered strictly from your notes.
 
-The application features a full-featured study workspace with tabbed artifact views, spaced-repetition flashcard practice (SRS), weak-area tracking, a interactive quiz mode, follow-up chat grounded in the notes, daily study streak tracking, and the ability to save and share study sets.
+**Live app:** https://ai-study-notes-buddy.vercel.app
+**Built with:** Next.js 15 · React 19 · TypeScript · Google Gemini (Vercel AI SDK) · Tailwind CSS v4 · Framer Motion
 
-**Built with:** Next.js 15, React 19, TypeScript, Google Gemini AI, Framer Motion, Tailwind CSS v4  
-**Target audience:** Students and lifelong learners who want to optimize their study review time  
-**Key problem solved:** Students spend hours re-reading notes without active engagement; this app transforms passive notes into active study tools in seconds.
+![Hero — the study workspace](docs/screenshots/hero.png)
 
-## Setup & Run Instructions
+---
 
-### Prerequisites
-- Node.js 18+ installed
-- Google Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
+## Screenshots
 
-### Installation
+| Generated summary | Flashcard deck |
+| --- | --- |
+| ![Summary tab](docs/screenshots/summary.png) | ![Flashcards tab](docs/screenshots/flashcards.png) |
+
+| Interactive quiz | Follow-up chat grounded in notes |
+| --- | --- |
+| ![Quiz tab](docs/screenshots/quiz.png) | ![Follow-up chat](docs/screenshots/follow-up-chat.png) |
+
+---
+
+## Features
+
+- **Structured study material, not a chatbot** — one paste produces three artifacts (markdown summary, 3–12 flashcards, 2–8 MCQs) as schema-validated JSON via `generateObject` + zod
+- **Generation options** — difficulty (easy/medium/hard), artifact counts, and output language (English / اردو with RTL + Nastaliq font)
+- **Flashcards, three ways** — browse (flip, arrows, search), practice (know/don't-know with re-queue), and **SRS study mode** (simplified SM-2: Again/Good/Easy, ease factors, due-today queue). Text-to-speech listen button included
+- **Interactive quiz** — lock-on-answer, instant right/wrong feedback with explanations, live score, retake, and an end-of-quiz "Review your mistakes" panel
+- **Weak areas** — anything missed twice surfaces in one tab with jump-to-review links
+- **Follow-up chat** — streaming Q&A grounded in the pasted notes; notes are embedded in the system prompt server-side so answers can't drift
+- **File import** — paste text, or import `.txt` / `.md` / text-based PDF (parsed locally, nothing uploaded)
+- **History & persistence** — every set saved to localStorage (cap 20), reopen with zero tokens, live search, delete with 8-second Undo toast
+- **Mixed practice** — a combined shuffled quiz across all saved sets
+- **Daily streak + study stats** — consecutive-day counter and per-set totals
+- **Word export** — one click downloads a real `.doc` handout
+- **Keyboard-first** — Space flips cards, `1/2/3` rate recall, `1–9` answer quiz questions
+- **Installable PWA** — manifest + service worker (offline shell; API never cached)
+- **Accessible** — WCAG 2.1 AA, axe-clean, full keyboard support, `prefers-reduced-motion` respected throughout
+
+## Quick Start
+
 ```bash
-git clone <repository-url>
-cd streaming-chat-capstone
 npm install
+cp .env.example .env.local   # add your Gemini API key (free: https://aistudio.google.com/apikey)
+npm run dev                  # http://localhost:3000
 ```
 
-### Environment Configuration
-Copy `.env.example` to `.env.local` and add your Gemini API key:
-```
-GOOGLE_GENERATIVE_AI_API_KEY=your_key_here
-```
+| Variable | Required | Description |
+| --- | --- | --- |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Yes | Gemini API key — server-side only, never exposed to the client |
+| `GOOGLE_MODEL` | No | Override the default model (`gemini-3.1-flash-lite`) |
 
-### Running the Application
-```bash
-npm run dev
-```
-
-The application will be available at [http://localhost:3000](http://localhost:3000).
-
-### Build for Production
-```bash
-npm run build
-npm run start
-```
-
-## Architecture Overview
-
-### Folder Structure
-```
-app/              # Next.js 13+ App Router
-  layout.tsx      # Root layout with metadata, providers, and global CSS
-  globals.css     # Tailwind v4 + design tokens (+color-accent: #d69cae)
-  page.tsx        # Home page with SplashGate → OnboardingGate → NotesBuddy
-  api/notes/      # API routes for generation, explain, chat
-  api/chat/       # Streaming chat API
-
-components/       # React components
-  notes-input.tsx     # Hero + textarea + generate flow (Phases 5-10)
-  notes-buddy.tsx     # State orchestrator (input/generating/result/error)
-  notes-result.tsx    # Tabbed view: Summary | Flashcards | Quiz | Weak areas
-  flashcards-view.tsx # Browse/practice/study SRS modes (flip cards + TTS listen)
-  notes-chat.tsx      # Follow-up chat about a study set
-  input-top-bar.tsx   # Streak chip + stats + recent sets popover
-  streak-display.tsx  # Daily streak chip
-  weak-areas-view.tsx # Most-missed cards/questions queries
-
-lib/              # Utility libraries and pure logic
-  config.ts              # SINGLE SOURCE OF TRUTH: system prompts, generation config
-  export-notes.ts        # studySetToWordHtml + downloadWord (.doc), markdown/txt helpers
-  quiz-progress.ts       # Mid-quiz answer persistence per set
-  srs.ts                 # Simplified SM-2: ratings, due logic, miss counting
-  share-link.ts          # encode/decode a SavedStudySet into URL-safe base64
-  streak.ts              # Daily streak: local date keys, one count/day, best-streak
-  utils.ts               # cn(), formatTime(), generateId(), debounce()
-  view-transition.ts     # View Transition API wrapper
-
-hooks/
-  use-auto-scroll.ts     # Pinned/free auto-scroll logic (threshold 30px)
-
-types/
-  notes.ts               # StudyNotes, Flashcard, QuizQuestion, SavedStudySet interfaces
-
-app-shell/          # App shell components
-  app-shell.tsx         # Sidebar + main content area, mobile drawer
-  streak-display.tsx     # Streak chip in top bar
-  notes-history.tsx      # Saved study sets list with CRUD
+## Architecture
 
 ```
-
-### State Management
-- **Clerk:** Authentication, onboarding flag (per-account, not per-browser)
-- **localStorage:** Saved study sets (capped at 20), SRS ratings, streak data, weak areas
-- **NotesBuddy state machine:** `input` → `generating` → `result` / `error`
-- **View transitions:** Crossfade transition between hero ↔ compose ↔ result views using the View Transitions API
-
-### Key Decisions
-- **Client-side only:** No database; all persistence via localStorage + Clerk metadata
-- **Grounded generations:** Every AI output is grounded only in the user's pasted notes via system prompt — no hallucinations
-- **Progressive enhancement:** Hero → compose → results flows smoothly with Framer Motion animations
-- **Mobile-first:** Touch-friendly targets (44px minimum), responsive grid, swipeable flashcards
-
-## AI Integration Explanation
-
-The application uses **Google Gemini** (model: `gemini-3.1-flash-lite` by default, overridable via `GOOGLE_MODEL` env var) through the Vercel AI SDK v4.
-
-### Core Prompt Design
-The system prompt grounds the model exclusively in the user's pasted notes:
-- **No hallucinations:** The model cannot invent facts not present in the notes
-- **Consistent with notes:** All generated content references the actual pasted material
-- **Multi-artifact generation:** A single API call produces summary, flashcards, and quiz simultaneously
-
-### API Call Structure
+app/
+  page.tsx                  # SplashGate → OnboardingGate → NotesBuddy
+  layout.tsx                # Fonts (Playfair + Noto Nastaliq), metadata, SW registration
+  globals.css               # Tailwind v4 @theme tokens (dusty-rose-on-black), keyframes, print CSS
+  manifest.ts               # PWA manifest
+  study-set/[id]/page.tsx   # Deep link: open a saved set by id (404 state if missing)
+  share/page.tsx            # Import a set shared via /share?s=<base64>
+  mixed-practice/page.tsx   # Combined quiz pulled from all saved sets
+  api/notes/route.ts        # POST notes → summary+flashcards+quiz (generateObject + zod)
+  api/notes/chat/route.ts   # POST follow-up chat (streamText; notes injected server-side)
+  api/notes/explain/route.ts# POST "explain differently" for one card
+  api/chat/route.ts         # Legacy streaming chat route
+components/
+  notes-buddy.tsx           # Orchestrator: input/generating/result/error state machine + persistence
+  notes-input.tsx           # Hero (tabbed auto-cycling preview) + compose view + Generate
+  notes-result.tsx          # Tabs: Summary | Flashcards | Quiz | Weak areas
+  flashcards-view.tsx       # Browse / practice / SRS study modes, deck-stack flip cards, TTS
+  quiz-view.tsx             # MCQ quiz with live score, keyboard shortcuts, review panel
+  weak-areas-view.tsx       # Most-missed items with jump-to-review
+  notes-chat.tsx            # Grounded follow-up chat panel
+  input-top-bar.tsx         # Streak chip + stats/recent popovers
+  app-shell/app-shell.tsx   # Sidebar (collapsible, persisted), mobile drawer, skip link
+  splash-screen.tsx         # Splash on every page load (tri-state, no home flash)
+  onboarding-welcome.tsx    # 3-step welcome per page load
+  notes-history.tsx         # Saved sets: search, reopen, delete
+lib/
+  config.ts                 # SINGLE SOURCE OF TRUTH: prompts, model, generation config, error copy
+  srs.ts                    # Simplified SM-2 scheduler (pure functions)
+  weak-areas.ts             # Miss aggregation (threshold 2, most-missed-first)
+  streak.ts                 # Daily streak (local date keys, DST-safe)
+  export-notes.ts           # Word .doc serializer + download helpers
+  file-import.ts            # txt/md reader + lazy pdfjs extraction
+  share-link.ts             # base64 encode/decode for share links
+  view-transition.ts        # View Transition API wrapper (abort-safe)
+  utils.ts                  # cn(), formatTime(), generateId(), debounce()
+tests/                      # 251 Vitest + React Testing Library tests (26 files)
 ```
-POST /api/notes
-{
-  "notes": "User's pasted lecture notes",
-  "options": {
-    "difficulty": "medium",     // easy/medium/hard
-    "flashcardCount": 8,        // 3-12
-    "quizCount": 5,             // 3-8
-    "language": "en"            // "en" or "ur" (Urdu)
-  }
-}
-```
 
-The API route (`app/api/notes/route.ts`) validates the request, checks the API key, and calls `streamText` with the **Notes System Prompt** from `lib/config.ts`. The system prompt instructs the model to:
-1. Generate a summary, flashcards, and quiz from the notes
-2. Ground all output exclusively in the provided notes
-3. Include Urdu language support when `language: "ur"` is selected
-4. Clamp flashcard/quiz counts to schema-valid bounds
+### Data flow
 
-### Why This Approach Matters
-Traditional AI tools can confidently hallucinate facts not present in source material. This app ensures all generated study material is **verified against the user's own notes**, making it safe for academic use and test preparation.
+1. `NotesInput` → `NotesBuddy.handleGenerate` → `POST /api/notes` (notes + options)
+2. The route validates input (30–15,000 chars), whitelists/clamps options, builds the system prompt via `buildNotesSystemPrompt(options)`, and calls `generateObject` with a zod schema
+3. The schema-validated artifact renders in the tabbed view and is saved to localStorage (`capstone-study-sets`)
+4. Follow-up chat sends `{ notes, messages }` to `/api/notes/chat`; the server appends the notes to the follow-up prompt — the client can never inject prompt text
+
+## The AI integration, explained
+
+All prompts live in `lib/config.ts` (server-only):
+
+- **`buildNotesSystemPrompt(options)`** — instructs Gemini to produce exactly three artifacts, grounded strictly in the pasted notes ("never import outside knowledge"). Difficulty appends a level-specific instruction; counts are clamped to the zod schema's bounds so the prompt can never ask for what the schema would reject; Urdu adds an academic-Urdu instruction that keeps technical terms in English.
+- **`NOTES_FOLLOWUP_SYSTEM_PROMPT`** — constrains the chat to the notes: "if the answer is not in the notes, say so."
+- **Structured output over streaming** — `/api/notes` uses `generateObject` with a zod schema, so the UI never parses raw model text; invalid model output fails server-side, not in the browser.
 
 ## Testing
 
-### Running Tests
 ```bash
-npm test              # Run all 236 tests
-npm run test:coverage # Run with coverage report
-npm test:watch        # Run in watch mode
+npm test                 # 251 tests, 26 files — Vitest + React Testing Library
+npm run test:coverage    # v8 coverage report
 ```
 
-### Coverage
-- **236 tests across 25 test files**
-- **76.5% overall coverage**
-- Critical logic areas well-covered: SRS/spaced-repetition (100%), generate button state machine (91.72%), flashcard render (99.5%), onboarding completion logic
-- Chat/chat-input files excluded from coverage targets (Clerk auth components)
+- **251 tests, all green; 76.6% line coverage** (threshold enforced at 50%)
+- Covered: API route validation + prompt building + security headers (mocked AI SDK — zero tokens), the generate state machine, hero↔compose transitions, flashcard modes, SRS math, quiz scoring and weak-area flow, splash/onboarding lifecycle, export serializers, share links, deep links, and every lib helper
+- Plus a **real-browser QA pass** (headless Chrome): full user flows click-tested, console/network monitored — zero errors
 
-### Test Categories
-- **SRS logic:** `tests/srs.test.ts` — Again/Good/Easy ratings, due date logic, purity
-- **NotesInput:** `tests/notes-input.test.tsx` — Hero/compose transitions, back navigation, state machine
-- **Flashcards:** `tests/flashcards-view.test.tsx` — Browse/flip/practice/study modes
-- **NotesBuddy:** `tests/notes-buddy.test.tsx` — Generate flow, persistence, undo toast
-- **All other test files:** Onboarding, stats, share, export, file import, splash, streak, weak areas, quiz view, quiz progress
+## Performance & accessibility audit
 
-## Known Limitations & Future Improvements
+Production-build Lighthouse: **95 Performance · 100 Accessibility · 100 Best Practices · 100 SEO** (report: `lighthouse-report.json`). axe-core across hero, result, flashcards, and quiz screens: **0 violations**.
 
-### Current Limitations
-- **Per-browser persistence:** Study data (sets, streak, SRS, weak areas) lives in localStorage and is **not synced across devices** per account — would need a database (e.g., Supabase) tied to Clerk user ID
-- **Text input only:** PDF/multi-format upload not yet supported (text paste only)
-- **No mock exam mode, tags/folders, sharing links, badges, or keyboard shortcuts** — these were scoped out
-- **API rate limiting:** Gemini API has rate limits (429 errors handled gracefully)
-
-### Future Improvements
-- Database-backed persistence (Supabase/Clerk) for cross-device sync
-- PDF/multi-format text extraction
-- Mock exam mode with timed practice
-- Tags/folders for note organization
-- Sharing links for study sets
-- Badges and achievement system
-- Keyboard shortcuts power user mode
-- Additional languages beyond English/Urdu
+Concrete audit-driven fixes: muted-text contrast raised to WCAG AA (`#7a6670 → #9a8691`), and the splash hold shortened (1.6s → 0.8s) after it showed up as LCP cost — performance went 77 → 95.
 
 ## Deployment
 
-This project is configured for **Vercel** deployment.
+Standard Next.js on Vercel: push `main`, set `GOOGLE_GENERATIVE_AI_API_KEY` in project env vars. See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full checklist, failure modes, and rollback plan (redeploy/promote a previous deployment).
 
-### Deployment Process
-1. Push to the `main` branch
-2. Vercel auto-deploys the production build
-3. Environment variables must be set in the Vercel dashboard:
-   - `GOOGLE_GENERATIVE_AI_API_KEY` — required for AI generation
-   - `GOOGLE_MODEL` — optional, overrides default `gemini-3.1-flash-lite`
+## Known limitations
 
-### Pre-Deployment Checklist
-- [ ] `npm run build` compiles successfully
-- [ ] `npm test` passes (236 tests)
-- [ ] `GOOGLE_GENERATIVE_AI_API_KEY` set in Vercel dashboard
-- [ ] No console errors on a production build
-- [ ] `GOOGLE_MODEL` env var configured if overriding default
-
-### Rollback Plan
-- Vercel automatically preserves previous deployments
-- Instant rollback available in the Vercel dashboard
-- To rollback: go to Vercel → Deployments → select previous deployment → "Rollback"
-- Rollback is instant and preserves all localStorage data (per-browser)
-
-### Live Demo
-The application is deployed at: **https://ai-study-notes-buddy.vercel.app**
+- **Per-browser data** — sets, streak, and SRS state live in localStorage; no accounts, no cross-device sync (a database + auth would be the next phase)
+- **Grounding is prompt-enforced, not retrieval** — notes are capped at 15,000 characters
+- **File import is text-based** — scanned/image-only PDFs have no text layer to extract
+- **English and Urdu only**
 
 ## Reflection
-See [`REFLECTION.md`](./REFLECTION.md) — the project owner's first-person reflection on what was hardest, what she'd do differently, and what surprised her.
+
+See [`REFLECTION.md`](./REFLECTION.md).
+
+## License
+
+MIT — built for the 2026 Frontend Engineering Capstone.
