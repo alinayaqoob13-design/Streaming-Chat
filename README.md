@@ -9,15 +9,33 @@
 
 ---
 
-## Screenshots
+## App Flow
 
-| Generated summary | Flashcard deck |
-| --- | --- |
-| ![Summary tab](docs/screenshots/summary.png) | ![Flashcards tab](docs/screenshots/flashcards.png) |
+Every screen, in the order a student sees them:
 
-| Interactive quiz | Follow-up chat grounded in notes |
+| 1. Splash — on every page load | 2. Onboarding — 3-step welcome |
 | --- | --- |
-| ![Quiz tab](docs/screenshots/quiz.png) | ![Follow-up chat](docs/screenshots/follow-up-chat.png) |
+| ![Splash screen](docs/screenshots/splash.png) | ![Onboarding welcome](docs/screenshots/onboarding.png) |
+
+| 3. Home — hero with live preview | 4. Compose — notes + options |
+| --- | --- |
+| ![Hero workspace](docs/screenshots/hero.png) | ![Compose view](docs/screenshots/compose.png) |
+
+| 5. Generating — staged progress | 6. Summary — grounded in your notes |
+| --- | --- |
+| ![Generating steps](docs/screenshots/generating.png) | ![Summary tab](docs/screenshots/summary.png) |
+
+| 7. Flashcards — question | 8. Flashcards — flip for the answer |
+| --- | --- |
+| ![Flashcard front](docs/screenshots/flashcards.png) | ![Flashcard flipped](docs/screenshots/flashcard-answer.png) |
+
+| 9. Quiz — instant feedback | 10. Review your mistakes |
+| --- | --- |
+| ![Quiz tab](docs/screenshots/quiz.png) | ![Review mistakes panel](docs/screenshots/review-mistakes.png) |
+
+| 11. Follow-up chat — answers only from your notes | 12. Mobile — fully responsive |
+| --- | --- |
+| ![Follow-up chat](docs/screenshots/follow-up-chat.png) | ![Mobile view](docs/screenshots/mobile.png) |
 
 ---
 
